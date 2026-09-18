@@ -6,7 +6,6 @@ type Bindings = {
   axozap_golds_db: D1Database;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
-  ADMIN_PASSWORD?: string;
 };
 
 export type Gold = {
@@ -32,7 +31,7 @@ app.use(
       "Content-Type",
       "Authorization",
       "cf-access-jwt-assertion",
-      "x-admin-password",
+      "Cf-Access-Jwt-Assertion",
     ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
@@ -40,84 +39,84 @@ app.use(
   })
 );
 
-// Authorization check: supports Cloudflare Access JWT and Admin Password
+// Validate a Cloudflare Access JWT properly using the team's public JWKS.
+// Returns true only if the token is signed by Cloudflare and the AUD matches.
 async function isAuthorized(c: any): Promise<boolean> {
-  const reqPw =
-    c.req.header("x-admin-password") ||
-    c.req.header("Authorization")?.replace(/^Bearer\s+/i, "");
-
-  const envPw = c.env.ADMIN_PASSWORD || "axozap";
-  if (reqPw && reqPw === envPw) {
-    return true;
-  }
-
-  // Cloudflare Access JWT validation
-  const teamDomain = c.env.CF_ACCESS_TEAM_DOMAIN || "https://axozapteam.cloudflareaccess.com";
+  const teamDomain = c.env.CF_ACCESS_TEAM_DOMAIN;
   const aud = c.env.CF_ACCESS_AUD;
 
-  const token =
-    c.req.header("cf-access-jwt-assertion") ||
-    c.req.header("Cf-Access-Jwt-Assertion");
-
-  if (teamDomain && token) {
-    try {
-      const jwksUrl = `${teamDomain.replace(/\/$/, "")}/cdn-cgi/access/certs`;
-      const jwksRes = await fetch(jwksUrl, {
-        cf: { cacheEverything: true, cacheTtl: 3600 },
-      } as any);
-
-      if (jwksRes.ok) {
-        const { keys } = (await jwksRes.json()) as { keys: JsonWebKey[] };
-        for (const jwk of keys) {
-          try {
-            const cryptoKey = await crypto.subtle.importKey(
-              "jwk",
-              jwk,
-              { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-              false,
-              ["verify"]
-            );
-
-            const parts = token.split(".");
-            if (parts.length !== 3) continue;
-
-            const [headerB64, payloadB64, sigB64] = parts;
-            const signingInput = new TextEncoder().encode(
-              `${headerB64}.${payloadB64}`
-            );
-            const sigBytes = Uint8Array.from(
-              atob(sigB64.replace(/-/g, "+").replace(/_/g, "/")),
-              (ch) => ch.charCodeAt(0)
-            );
-
-            const valid = await crypto.subtle.verify(
-              "RSASSA-PKCS1-v1_5",
-              cryptoKey,
-              sigBytes,
-              signingInput
-            );
-            if (!valid) continue;
-
-            const payload = JSON.parse(
-              atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/"))
-            );
-            const now = Math.floor(Date.now() / 1000);
-            if (payload.exp && payload.exp < now) return false;
-            if (payload.nbf && payload.nbf > now) return false;
-            if (aud && !payload.aud?.includes(aud)) return false;
-
-            return true;
-          } catch {
-            // try next key
-          }
-        }
-      }
-    } catch (err) {
-      console.error("JWT validation error:", err);
-    }
+  // Both secrets/vars must be configured - fail closed if missing
+  if (!teamDomain || !aud) {
+    console.error("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD not configured");
+    return false;
   }
 
-  return false;
+  const token =
+    c.req.header("cf-access-jwt-assertion") || // passed by frontend JS
+    c.req.header("Cf-Access-Jwt-Assertion");   // injected by CF Access proxy
+
+  if (!token) return false;
+
+  try {
+    const jwksUrl = `${teamDomain.replace(/\/$/, "")}/cdn-cgi/access/certs`;
+    const jwksRes = await fetch(jwksUrl, {
+      cf: { cacheEverything: true, cacheTtl: 3600 },
+    } as any);
+
+    if (!jwksRes.ok) {
+      console.error("Failed to fetch JWKS:", jwksRes.status);
+      return false;
+    }
+
+    const { keys } = (await jwksRes.json()) as { keys: JsonWebKey[] };
+
+    for (const jwk of keys) {
+      try {
+        const cryptoKey = await crypto.subtle.importKey(
+          "jwk",
+          jwk,
+          { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+          false,
+          ["verify"]
+        );
+
+        const parts = token.split(".");
+        if (parts.length !== 3) continue;
+
+        const [headerB64, payloadB64, sigB64] = parts;
+        const signingInput = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+        const sigBytes = Uint8Array.from(
+          atob(sigB64.replace(/-/g, "+").replace(/_/g, "/")),
+          (ch) => ch.charCodeAt(0)
+        );
+
+        const valid = await crypto.subtle.verify(
+          "RSASSA-PKCS1-v1_5",
+          cryptoKey,
+          sigBytes,
+          signingInput
+        );
+        if (!valid) continue;
+
+        const payload = JSON.parse(
+          atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/"))
+        );
+        const now = Math.floor(Date.now() / 1000);
+
+        if (payload.exp && payload.exp < now) return false;
+        if (payload.nbf && payload.nbf > now) return false;
+        if (!payload.aud?.includes(aud)) return false;
+
+        return true;
+      } catch {
+        // try next key
+      }
+    }
+    return false;
+  } catch (err) {
+    console.error("JWT validation error:", err);
+    return false;
+  }
 }
 
 function formatGold(row: any): Gold {
@@ -138,19 +137,6 @@ function formatGold(row: any): Gold {
 app.get("/health", (c) => c.json({ status: "ok" }));
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 
-// Verify admin authorization
-app.get("/api/admin/verify", async (c) => {
-  const auth = await isAuthorized(c);
-  if (!auth) return c.json({ authorized: false }, 401);
-  return c.json({ authorized: true });
-});
-
-app.post("/api/admin/verify", async (c) => {
-  const auth = await isAuthorized(c);
-  if (!auth) return c.json({ authorized: false }, 401);
-  return c.json({ authorized: true });
-});
-
 // GET golds
 async function handleGetGolds(c: any) {
   const admin = await isAuthorized(c);
@@ -165,7 +151,7 @@ async function handleGetGolds(c: any) {
   const list = (results || []).map(formatGold);
 
   if (!admin) {
-    // Sanitize sequential placement numbers for public view so hidden gaps are not revealed
+    // Sanitize sequential placement numbers for public view
     return c.json(
       list.map((item: Gold, index: number) => ({
         ...item,
@@ -180,7 +166,7 @@ async function handleGetGolds(c: any) {
 app.get("/golds", handleGetGolds);
 app.get("/api/golds", handleGetGolds);
 
-// POST gold
+// POST gold (Admin only)
 async function handlePostGold(c: any) {
   if (!(await isAuthorized(c))) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -190,7 +176,6 @@ async function handlePostGold(c: any) {
   const gold = body.gold || body;
   const db = c.env.axozap_golds_db;
 
-  // Compute next placement
   let placement = gold.placement;
   if (placement == null) {
     const maxRow: any = await db
@@ -228,7 +213,7 @@ async function handlePostGold(c: any) {
 app.post("/golds", handlePostGold);
 app.post("/api/golds", handlePostGold);
 
-// PUT gold
+// PUT gold (Admin only)
 async function handlePutGold(c: any) {
   if (!(await isAuthorized(c))) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -277,7 +262,7 @@ async function handlePutGold(c: any) {
 app.put("/golds/:id", handlePutGold);
 app.put("/api/golds/:id", handlePutGold);
 
-// DELETE gold
+// DELETE gold (Admin only)
 async function handleDeleteGold(c: any) {
   if (!(await isAuthorized(c))) {
     return c.json({ error: "Unauthorized" }, 401);

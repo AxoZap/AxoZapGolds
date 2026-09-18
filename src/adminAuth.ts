@@ -1,9 +1,8 @@
 /**
- * Handles Admin Authentication:
- * 1. Cloudflare Access (Zero Trust) JWT cookie (CF_Authorization)
- * 2. Password fallback (stored in localStorage) for local testing or direct login
+ * Reads the CF_Authorization cookie set by Cloudflare Access after Zero Trust login.
+ * This is forwarded as the cf-access-jwt-assertion header on every admin API call.
+ * Running locally (no Zero Trust) -> returns null -> worker rejects with 401.
  */
-
 export function getCFAccessToken(): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie
@@ -12,35 +11,15 @@ export function getCFAccessToken(): string | null {
   return match ? match.split('=').slice(1).join('=') : null;
 }
 
-export function getStoredAdminPassword(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('axozap_admin_password');
-}
-
-export function setStoredAdminPassword(password: string | null): void {
-  if (typeof window === 'undefined') return;
-  if (password) {
-    localStorage.setItem('axozap_admin_password', password);
-  } else {
-    localStorage.removeItem('axozap_admin_password');
-  }
-}
-
+/** Returns headers for an admin API call. Throws if no CF Access token is found. */
 export function adminHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const headers: Record<string, string> = {
+  const token = getCFAccessToken();
+  if (!token) {
+    throw new Error('No Cloudflare Access token found. Are you logged in via Zero Trust?');
+  }
+  return {
     'Content-Type': 'application/json',
+    'cf-access-jwt-assertion': token,
     ...extra,
   };
-
-  const cfToken = getCFAccessToken();
-  if (cfToken) {
-    headers['cf-access-jwt-assertion'] = cfToken;
-  }
-
-  const pw = getStoredAdminPassword();
-  if (pw) {
-    headers['x-admin-password'] = pw;
-  }
-
-  return headers;
 }

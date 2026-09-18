@@ -3,9 +3,8 @@ import { GoldList } from './components/GoldList';
 import { GoldFilters, FilterState } from './components/GoldFilters';
 import { AddGoldModal } from './components/AddGoldModal';
 import { EditGoldModal } from './components/EditGoldModal';
-import { AdminLoginModal } from './components/AdminLoginModal';
-import { adminHeaders, getCFAccessToken, getStoredAdminPassword, setStoredAdminPassword } from './adminAuth';
-import { Sparkles, Plus, Lock, Unlock, Loader2 } from 'lucide-react';
+import { adminHeaders, getCFAccessToken } from './adminAuth';
+import { Sparkles, Plus, Unlock, Loader2 } from 'lucide-react';
 
 export interface Gold {
   id?: number | string;
@@ -22,14 +21,13 @@ export interface Gold {
 const API_URL = "https://axozap-golds-backend.peteystillwell.workers.dev/api";
 
 export default function App() {
-  const isUrlAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/admin');
-  const [isAdmin, setIsAdmin] = useState(isUrlAdmin || !!getCFAccessToken() || !!getStoredAdminPassword());
+  // Check if current URL path is /admin or /Admin (protected by Cloudflare Zero Trust)
+  const isAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/admin');
 
   const [golds, setGolds] = useState<Gold[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGold, setEditingGold] = useState<Gold | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const [filters, setFilters] = useState<FilterState>({
     difficulty: 'All',
@@ -44,17 +42,15 @@ export default function App() {
 
   useEffect(() => {
     loadGolds();
-  }, [isAdmin]);
+  }, []);
 
   const loadGolds = async () => {
     try {
       setLoading(true);
       const headers: Record<string, string> = {};
       if (isAdmin) {
-        const cfToken = getCFAccessToken();
-        if (cfToken) headers['cf-access-jwt-assertion'] = cfToken;
-        const pw = getStoredAdminPassword();
-        if (pw) headers['x-admin-password'] = pw;
+        const token = getCFAccessToken();
+        if (token) headers['cf-access-jwt-assertion'] = token;
       }
 
       const response = await fetch(`${API_URL}/golds`, { headers });
@@ -85,7 +81,7 @@ export default function App() {
         setShowAddModal(false);
       } else {
         const err = await response.json();
-        alert(err.error || 'Failed to add golden strawberry. Please check admin permissions.');
+        alert(err.error || 'Failed to add golden strawberry.');
       }
     } catch (error) {
       console.error('Error adding gold:', error);
@@ -140,14 +136,6 @@ export default function App() {
     } catch (error) {
       console.error('Error deleting gold:', error);
       alert('Failed to delete gold.');
-    }
-  };
-
-  const handleLogout = () => {
-    setStoredAdminPassword(null);
-    setIsAdmin(false);
-    if (isUrlAdmin) {
-      window.location.href = '/';
     }
   };
 
@@ -232,29 +220,15 @@ export default function App() {
         <p className="subtitle">Celeste Golden Strawberries</p>
       </header>
 
-      {/* Admin Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {isAdmin && (
-            <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
-              <Plus size={18} />
-              Add Golden
-            </button>
-          )}
+      {/* Admin Action Bar (only shown on /admin) */}
+      {isAdmin && (
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
+            <Plus size={18} />
+            Add Golden
+          </button>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {isAdmin ? (
-            <button onClick={handleLogout} className="btn btn-secondary btn-sm" title="Log out of Admin">
-              <Lock size={14} /> Exit Admin
-            </button>
-          ) : (
-            <button onClick={() => setShowLoginModal(true)} className="btn btn-secondary btn-sm" title="Admin Login">
-              <Lock size={14} /> Admin
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Modals */}
       {showAddModal && (
@@ -263,17 +237,6 @@ export default function App() {
 
       {editingGold && (
         <EditGoldModal gold={editingGold} onSave={handleSaveEdit} onCancel={() => setEditingGold(null)} />
-      )}
-
-      {showLoginModal && (
-        <AdminLoginModal
-          apiUrl={API_URL}
-          onSuccess={() => {
-            setIsAdmin(true);
-            setShowLoginModal(false);
-          }}
-          onCancel={() => setShowLoginModal(false)}
-        />
       )}
 
       {/* Filters and Sorting */}
