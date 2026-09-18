@@ -174,6 +174,7 @@ body {
   padding: 0.75rem 0.9rem;
   font-size: 0.95rem;
   transition: border-color 0.2s;
+  color-scheme: dark;
 }
 
 .form-input:focus, .form-select:focus {

@@ -22,12 +22,15 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
     }
   }
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const initialDate = gold.date && gold.date !== 'Initial' ? gold.date : todayStr;
+
   const [formData, setFormData] = useState({
     placement: gold.placement != null ? String(gold.placement) : '',
     name: gold.name,
     baseDifficulty: initialBase,
     gmModifier: initialMod,
-    date: gold.date || 'Initial',
+    date: initialDate,
     attempts: gold.attempts != null ? String(gold.attempts) : '',
     clip: gold.clip || '',
     hidden: Boolean(gold.hidden),
@@ -39,6 +42,9 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
     const errs: Record<string, string> = {};
     if (!formData.name.trim()) {
       errs.name = 'Name is required';
+    }
+    if (!formData.date.trim()) {
+      errs.date = 'Date is required';
     }
     if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
       errs.attempts = 'Attempts must be a non-negative number';
@@ -69,7 +75,7 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
         placement: placementNum,
         name: formData.name.trim(),
         difficulty: finalDifficulty,
-        date: formData.date.trim() || 'Initial',
+        date: formData.date.trim(),
         attempts: attemptsNum,
         clip: formData.clip.trim() || null,
         hidden: formData.hidden,
@@ -140,13 +146,15 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
 
             {/* Date */}
             <div className="form-group">
-              <label className="form-label">Date (or Initial)</label>
+              <label className="form-label">Date *</label>
               <input
-                type="text"
+                type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 className="form-input"
+                required
               />
+              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
             </div>
           </div>
 

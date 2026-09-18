@@ -12,7 +12,7 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
     name: '',
     baseDifficulty: 'Beginner',
     gmModifier: '',
-    date: 'Initial',
+    date: new Date().toISOString().split('T')[0],
     attempts: '',
     clip: '',
     hidden: false,
@@ -24,6 +24,9 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
     const errs: Record<string, string> = {};
     if (!formData.name.trim()) {
       errs.name = 'Name is required (e.g. 7c, 6b)';
+    }
+    if (!formData.date.trim()) {
+      errs.date = 'Date is required';
     }
     if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
       errs.attempts = 'Attempts must be a non-negative number';
@@ -47,7 +50,7 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
       onAdd({
         name: formData.name.trim(),
         difficulty: finalDifficulty,
-        date: formData.date.trim() || 'Initial',
+        date: formData.date.trim(),
         attempts: attemptsNum,
         clip: formData.clip.trim() || null,
         hidden: formData.hidden,
@@ -137,14 +140,15 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
           <div className="form-row">
             {/* Date */}
             <div className="form-group">
-              <label className="form-label">Date (or Initial)</label>
+              <label className="form-label">Date *</label>
               <input
-                type="text"
+                type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 className="form-input"
-                placeholder="Initial or YYYY-MM-DD"
+                required
               />
+              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
             </div>
 
             {/* Attempts */}
