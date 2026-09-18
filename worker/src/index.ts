@@ -137,7 +137,7 @@ function formatGold(row: any): Gold {
     placement: row.placement != null ? Number(row.placement) : Number(row.id),
     name: row.name,
     difficulty: row.difficulty,
-    date: row.date || "Initial",
+    date: row.date != null ? String(row.date) : "",
     attempts: row.attempts != null && row.attempts !== "" ? Number(row.attempts) : null,
     clip: row.clip || null,
     hidden: Boolean(row.hidden),

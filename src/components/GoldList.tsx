@@ -257,10 +257,19 @@ export function GoldList({
 
                     {/* Date */}
                     <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                      <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                        <Calendar size={13} />
-                        {gold.date || 'Initial'}
-                      </span>
+                      {gold.date && gold.date.trim() && gold.date.toLowerCase() !== 'initial' ? (
+                        <span className="date-badge">
+                          <Calendar size={13} />
+                          {gold.date}
+                        </span>
+                      ) : gold.date && gold.date.toLowerCase() === 'initial' ? (
+                        <span className="date-badge initial">
+                          <Calendar size={13} />
+                          Initial
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
                     </td>
 
                     {/* Attempts */}
@@ -467,10 +476,15 @@ export function GoldList({
 
                     {/* Group Date */}
                     <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
-                      {displayDate ? (
-                        <span className={`date-badge ${displayDate.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                      {displayDate && displayDate.trim() && displayDate.toLowerCase() !== 'initial' ? (
+                        <span className="date-badge">
                           <Calendar size={13} />
                           {displayDate}
+                        </span>
+                      ) : displayDate && displayDate.toLowerCase() === 'initial' ? (
+                        <span className="date-badge initial">
+                          <Calendar size={13} />
+                          Initial
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
@@ -642,10 +656,19 @@ export function GoldList({
 
                             {/* Date */}
                             <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
-                              <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                                <Calendar size={13} />
-                                {gold.date || 'Initial'}
-                              </span>
+                              {gold.date && gold.date.trim() && gold.date.toLowerCase() !== 'initial' ? (
+                                <span className="date-badge">
+                                  <Calendar size={13} />
+                                  {gold.date}
+                                </span>
+                              ) : gold.date && gold.date.toLowerCase() === 'initial' ? (
+                                <span className="date-badge initial">
+                                  <Calendar size={13} />
+                                  Initial
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                              )}
                             </td>
 
                             {/* Attempts */}
