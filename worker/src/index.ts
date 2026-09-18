@@ -22,6 +22,16 @@ export type Gold = {
   created_at?: string;
 };
 
+export type LevelGroup = {
+  id?: number | string;
+  name: string;
+  description?: string | null;
+  date?: string | null;
+  url?: string | null;
+  attempts?: number | null;
+  created_at?: string;
+};
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.use("*", logger(console.log));
@@ -133,6 +143,18 @@ function formatGold(row: any): Gold {
     hidden: Boolean(row.hidden),
     group_name: row.group_name ? String(row.group_name).trim() : null,
     completed: row.completed === 0 || row.completed === false ? false : true,
+    created_at: row.created_at,
+  };
+}
+
+function formatGroup(row: any): LevelGroup {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || null,
+    date: row.date || null,
+    url: row.url || null,
+    attempts: row.attempts != null && row.attempts !== "" ? Number(row.attempts) : null,
     created_at: row.created_at,
   };
 }
@@ -276,4 +298,153 @@ async function handleDeleteGold(c: any) {
 app.delete("/golds/:id", handleDeleteGold);
 app.delete("/api/golds/:id", handleDeleteGold);
 
+// ================= LEVEL GROUPS API =================
+
+// GET /groups
+async function handleGetGroups(c: any) {
+  const db = c.env.axozap_golds_db;
+  const { results } = await db.prepare("SELECT * FROM level_groups ORDER BY name ASC").all();
+  return c.json((results || []).map(formatGroup));
+}
+app.get("/groups", handleGetGroups);
+app.get("/api/groups", handleGetGroups);
+
+// POST /groups (Admin only)
+async function handlePostGroup(c: any) {
+  if (!(await isAuthorized(c))) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const body = await c.req.json();
+  const group = body.group || body;
+  const db = c.env.axozap_golds_db;
+
+  const name = String(group.name || "").trim();
+  if (!name) {
+    return c.json({ error: "Group name is required" }, 400);
+  }
+
+  const description = group.description ? String(group.description).trim() : null;
+  const date = group.date ? String(group.date).trim() : null;
+  const url = group.url ? String(group.url).trim() : null;
+  const attempts =
+    group.attempts !== undefined && group.attempts !== null && group.attempts !== ""
+      ? Number(group.attempts)
+      : null;
+
+  try {
+    const result = await db
+      .prepare(
+        "INSERT INTO level_groups (name, description, date, url, attempts) VALUES (?, ?, ?, ?, ?)"
+      )
+      .bind(name, description, date, url, attempts)
+      .run();
+
+    const newId = result.meta?.last_row_id;
+    const created: any = await db
+      .prepare("SELECT * FROM level_groups WHERE id = ?")
+      .bind(newId)
+      .first();
+
+    return c.json(formatGroup(created || { id: newId, name, description, date, url, attempts }), 201);
+  } catch (err: any) {
+    return c.json({ error: err.message || "Failed to create group" }, 400);
+  }
+}
+app.post("/groups", handlePostGroup);
+app.post("/api/groups", handlePostGroup);
+
+// PUT /groups/:id (Admin only) - Also cascades name updates to golds.group_name
+async function handlePutGroup(c: any) {
+  if (!(await isAuthorized(c))) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json();
+  const group = body.group || body;
+  const db = c.env.axozap_golds_db;
+
+  const existing: any = await db
+    .prepare("SELECT * FROM level_groups WHERE id = ?")
+    .bind(id)
+    .first();
+
+  if (!existing) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  const oldName = existing.name;
+  const newName = String(group.name || "").trim();
+  if (!newName) {
+    return c.json({ error: "Group name is required" }, 400);
+  }
+
+  const description = group.description ? String(group.description).trim() : null;
+  const date = group.date ? String(group.date).trim() : null;
+  const url = group.url ? String(group.url).trim() : null;
+  const attempts =
+    group.attempts !== undefined && group.attempts !== null && group.attempts !== ""
+      ? Number(group.attempts)
+      : null;
+
+  try {
+    await db
+      .prepare(
+        "UPDATE level_groups SET name = ?, description = ?, date = ?, url = ?, attempts = ? WHERE id = ?"
+      )
+      .bind(newName, description, date, url, attempts, id)
+      .run();
+
+    // If group name changed, cascade to all gold levels in this group
+    if (oldName !== newName) {
+      await db
+        .prepare("UPDATE golds SET group_name = ? WHERE group_name = ?")
+        .bind(newName, oldName)
+        .run();
+    }
+
+    const updated: any = await db
+      .prepare("SELECT * FROM level_groups WHERE id = ?")
+      .bind(id)
+      .first();
+
+    return c.json(formatGroup(updated));
+  } catch (err: any) {
+    return c.json({ error: err.message || "Failed to update group" }, 400);
+  }
+}
+app.put("/groups/:id", handlePutGroup);
+app.put("/api/groups/:id", handlePutGroup);
+
+// DELETE /groups/:id (Admin only)
+async function handleDeleteGroup(c: any) {
+  if (!(await isAuthorized(c))) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const id = Number(c.req.param("id"));
+  const db = c.env.axozap_golds_db;
+
+  const existing: any = await db
+    .prepare("SELECT * FROM level_groups WHERE id = ?")
+    .bind(id)
+    .first();
+
+  if (existing) {
+    // Ungroup levels belonging to this group
+    await db
+      .prepare("UPDATE golds SET group_name = NULL WHERE group_name = ?")
+      .bind(existing.name)
+      .run();
+
+    await db.prepare("DELETE FROM level_groups WHERE id = ?").bind(id).run();
+  }
+
+  return c.json({ success: true, id });
+}
+app.delete("/groups/:id", handleDeleteGroup);
+app.delete("/api/groups/:id", handleDeleteGroup);
+
 export default app;
+

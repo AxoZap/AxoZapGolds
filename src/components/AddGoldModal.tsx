@@ -6,12 +6,13 @@ interface AddGoldModalProps {
   onAdd: (gold: Omit<Gold, 'id'>) => void;
   onCancel: () => void;
   existingGroups?: string[];
+  defaultGroupName?: string;
 }
 
-export function AddGoldModal({ onAdd, onCancel, existingGroups = [] }: AddGoldModalProps) {
+export function AddGoldModal({ onAdd, onCancel, existingGroups = [], defaultGroupName = '' }: AddGoldModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    group_name: '',
+    group_name: defaultGroupName,
     completed: true,
     baseDifficulty: 'Beginner',
     gmModifier: '',

@@ -1,34 +1,48 @@
 import React, { useState } from 'react';
-import { Gold } from '../App';
-import { Calendar, Youtube, Edit3, Trash2, EyeOff, CheckCircle2, Circle, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { Gold, LevelGroup } from '../App';
+import {
+  Calendar,
+  Youtube,
+  Edit3,
+  Trash2,
+  EyeOff,
+  CheckCircle2,
+  Circle,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Plus,
+  ExternalLink,
+  Info,
+} from 'lucide-react';
 
 interface GoldListProps {
   golds: Gold[];
   allGolds: Gold[];
+  groups: LevelGroup[];
   onDelete: (id: string | number) => void;
   onEdit: (gold: Gold) => void;
+  onEditGroup: (group: LevelGroup) => void;
+  onDeleteGroup: (group: LevelGroup) => void;
+  onAddLevelToGroup: (groupName: string) => void;
   isAdmin: boolean;
 }
 
 type ListItem =
   | { type: 'standalone'; gold: Gold }
-  | { type: 'group'; groupName: string; golds: Gold[]; representative: Gold };
+  | { type: 'group'; groupName: string; golds: Gold[]; metadata?: LevelGroup };
 
 export function GoldList({
   golds,
+  groups,
   onDelete,
   onEdit,
+  onEditGroup,
+  onDeleteGroup,
+  onAddLevelToGroup,
   isAdmin,
 }: GoldListProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-
-  if (golds.length === 0) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-secondary)' }}>
-        <p style={{ fontSize: '1.1rem' }}>No golden strawberries found matching your filters.</p>
-      </div>
-    );
-  }
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups((prev) => ({
@@ -37,27 +51,57 @@ export function GoldList({
     }));
   };
 
-  // Grouping logic preserving the current filtered & sorted order
+  // Build a lookup map of group metadata by name (case-insensitive)
+  const groupMetaMap = new Map<string, LevelGroup>();
+  for (const grp of groups) {
+    groupMetaMap.set(grp.name.trim().toLowerCase(), grp);
+  }
+
+  // Construct items preserving list order
   const displayItems: ListItem[] = [];
   const processedGroups = new Set<string>();
 
   for (const gold of golds) {
-    const grp = gold.group_name?.trim();
-    if (!grp) {
+    const grpName = gold.group_name?.trim();
+    if (!grpName) {
       displayItems.push({ type: 'standalone', gold });
     } else {
-      if (!processedGroups.has(grp)) {
-        processedGroups.add(grp);
-        // All members in this group from the current filtered list
-        const groupMembers = golds.filter((g) => g.group_name?.trim() === grp);
+      const lowerGrp = grpName.toLowerCase();
+      if (!processedGroups.has(lowerGrp)) {
+        processedGroups.add(lowerGrp);
+        const groupMembers = golds.filter(
+          (g) => (g.group_name || '').trim().toLowerCase() === lowerGrp
+        );
+        const metadata = groupMetaMap.get(lowerGrp);
         displayItems.push({
           type: 'group',
-          groupName: grp,
+          groupName: metadata?.name || grpName,
           golds: groupMembers,
-          representative: gold,
+          metadata,
         });
       }
     }
+  }
+
+  // Also show defined groups from level_groups that currently have 0 matching levels
+  for (const grp of groups) {
+    const lowerGrp = grp.name.trim().toLowerCase();
+    if (!processedGroups.has(lowerGrp)) {
+      displayItems.push({
+        type: 'group',
+        groupName: grp.name,
+        golds: [],
+        metadata: grp,
+      });
+    }
+  }
+
+  if (displayItems.length === 0) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-secondary)' }}>
+        <p style={{ fontSize: '1.1rem' }}>No golden strawberries found matching your filters.</p>
+      </div>
+    );
   }
 
   const thStyle: React.CSSProperties = {
@@ -128,7 +172,7 @@ export function GoldList({
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-              {/* Level / Group Name */}
+              {/* Name */}
               <th style={thStyle}>Level / Group</th>
 
               {/* Status */}
@@ -143,11 +187,11 @@ export function GoldList({
               {/* Attempts */}
               <th style={{ ...thStyle, textAlign: 'center', width: '110px' }}>Attempts</th>
 
-              {/* Clip */}
-              <th style={{ ...thStyle, textAlign: 'center', width: '80px' }}>Clip</th>
+              {/* Clip / Group URL */}
+              <th style={{ ...thStyle, textAlign: 'center', width: '90px' }}>Clip / URL</th>
 
-              {/* Actions (Admin only) */}
-              {isAdmin && <th style={{ ...thStyle, textAlign: 'center', width: '100px' }}>Actions</th>}
+              {/* Actions */}
+              {isAdmin && <th style={{ ...thStyle, textAlign: 'center', width: '130px' }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -270,7 +314,7 @@ export function GoldList({
                             onClick={() => onEdit(gold)}
                             className="action-btn"
                             style={{ color: '#84cc16' }}
-                            title="Edit"
+                            title="Edit Level"
                           >
                             <Edit3 size={16} />
                           </button>
@@ -278,7 +322,7 @@ export function GoldList({
                             onClick={() => onDelete(gold.id!)}
                             className="action-btn"
                             style={{ color: '#ef4444' }}
-                            title="Delete"
+                            title="Delete Level"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -292,18 +336,27 @@ export function GoldList({
               // Group Row
               const isExpanded = Boolean(expandedGroups[item.groupName]);
               const groupLevels = item.golds;
-              const completedCount = groupLevels.filter((g) => g.completed !== false).length;
-              const isAllCompleted = completedCount === groupLevels.length;
-              const totalAttempts = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
-              const hasAnyAttempts = groupLevels.some((g) => g.attempts != null && g.attempts > 0);
+              const meta = item.metadata;
 
-              // Collective date: latest date or 'Initial'
-              const nonInitialDates = groupLevels
+              const completedCount = groupLevels.filter((g) => g.completed !== false).length;
+              const isAllCompleted = groupLevels.length > 0 && completedCount === groupLevels.length;
+
+              // Total attempts: group.attempts override if provided, otherwise sum of member levels
+              const memberAttemptsSum = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
+              const groupAttempts = meta?.attempts != null ? meta.attempts : (groupLevels.some((g) => g.attempts != null) ? memberAttemptsSum : null);
+
+              // Date: group.date override if provided, otherwise latest member date
+              const memberNonInitialDates = groupLevels
                 .map((g) => g.date)
                 .filter((d) => d && d.toLowerCase() !== 'initial');
-              const displayDate = nonInitialDates.length > 0
-                ? nonInitialDates.sort().reverse()[0]
+              const displayDate = meta?.date
+                ? meta.date
+                : memberNonInitialDates.length > 0
+                ? memberNonInitialDates.sort().reverse()[0]
                 : groupLevels[0]?.date || 'Initial';
+
+              // Group URL or video
+              const groupUrl = meta?.url;
 
               return (
                 <React.Fragment key={`group-${item.groupName}`}>
@@ -344,66 +397,89 @@ export function GoldList({
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
                         <Layers size={18} color="var(--accent)" />
-                        <span style={{ color: '#fff', fontWeight: 800, fontSize: '1.08rem', letterSpacing: '0.01em' }}>
-                          {item.groupName}
-                        </span>
-                        <span
-                          style={{
-                            background: 'rgba(245, 158, 11, 0.15)',
-                            color: 'var(--accent)',
-                            border: '1px solid rgba(245, 158, 11, 0.3)',
-                            padding: '0.1rem 0.5rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.72rem',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {groupLevels.length} {groupLevels.length === 1 ? 'level' : 'levels'}
-                        </span>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ color: '#fff', fontWeight: 800, fontSize: '1.08rem', letterSpacing: '0.01em' }}>
+                              {item.groupName}
+                            </span>
+                            <span
+                              style={{
+                                background: 'rgba(245, 158, 11, 0.15)',
+                                color: 'var(--accent)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                padding: '0.1rem 0.5rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {groupLevels.length} {groupLevels.length === 1 ? 'level' : 'levels'}
+                            </span>
+                          </div>
+                          {meta?.description && (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.15rem', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {meta.description}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
                     {/* Completion Status */}
                     <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.3rem',
-                          color: isAllCompleted ? '#10b981' : '#f59e0b',
-                          background: isAllCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                          border: `1px solid ${isAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
-                          padding: '0.15rem 0.55rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {isAllCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
-                        {completedCount}/{groupLevels.length}
-                      </span>
+                      {groupLevels.length > 0 ? (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            color: isAllCompleted ? '#10b981' : '#f59e0b',
+                            background: isAllCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                            border: `1px solid ${isAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                            padding: '0.15rem 0.55rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isAllCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+                          {completedCount}/{groupLevels.length}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.8rem' }}>
+                          Empty
+                        </span>
+                      )}
                     </td>
 
                     {/* Group Difficulty preview */}
                     <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                        {Array.from(new Set(groupLevels.map((g) => g.difficulty))).slice(0, 3).map((diff) => (
-                          <span key={diff}>{renderDifficultyBadge(diff)}</span>
-                        ))}
-                      </div>
+                      {groupLevels.length > 0 ? (
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          {Array.from(new Set(groupLevels.map((g) => g.difficulty))).slice(0, 3).map((diff) => (
+                            <span key={diff}>{renderDifficultyBadge(diff)}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
                     </td>
 
-                    {/* Latest Date */}
+                    {/* Group Date */}
                     <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
-                      <span className={`date-badge ${displayDate.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                        <Calendar size={13} />
-                        {displayDate}
-                      </span>
+                      {displayDate ? (
+                        <span className={`date-badge ${displayDate.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                          <Calendar size={13} />
+                          {displayDate}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
                     </td>
 
-                    {/* Total Attempts */}
+                    {/* Group Attempts */}
                     <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {hasAnyAttempts ? (
+                      {groupAttempts != null ? (
                         <span
                           style={{
                             display: 'inline-block',
@@ -420,177 +496,265 @@ export function GoldList({
                             textAlign: 'center',
                           }}
                         >
-                          {totalAttempts.toLocaleString()}
+                          {groupAttempts.toLocaleString()}
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
                       )}
                     </td>
 
-                    {/* Clip column placeholder */}
+                    {/* Group URL / Video Link */}
                     <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', opacity: 0.7 }}>
-                        {groupLevels.filter((g) => g.clip).length > 0
-                          ? `${groupLevels.filter((g) => g.clip).length} 🎬`
-                          : '—'}
-                      </span>
+                      {groupUrl ? (
+                        <a
+                          href={groupUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="clip-icon-link"
+                          title="Open Group URL / Video"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {groupUrl.includes('youtu') ? <Youtube size={19} /> : <ExternalLink size={17} />}
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
                     </td>
 
-                    {/* Actions column placeholder */}
+                    {/* Actions (Admin only) */}
                     {isAdmin && (
                       <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.6 }}>
-                          Group View
-                        </span>
+                        <div
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Add level to this group */}
+                          <button
+                            onClick={() => onAddLevelToGroup(item.groupName)}
+                            className="action-btn"
+                            style={{ color: 'var(--accent)' }}
+                            title={`Add level to ${item.groupName}`}
+                          >
+                            <Plus size={16} />
+                          </button>
+
+                          {/* Edit group */}
+                          <button
+                            onClick={() => {
+                              if (meta) {
+                                onEditGroup(meta);
+                              } else {
+                                // synthesize group object if not yet persisted in level_groups
+                                onEditGroup({
+                                  name: item.groupName,
+                                  description: '',
+                                  date: '',
+                                  url: '',
+                                  attempts: null,
+                                });
+                              }
+                            }}
+                            className="action-btn"
+                            style={{ color: '#84cc16' }}
+                            title="Edit Group Details"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+
+                          {/* Delete group */}
+                          {meta && (
+                            <button
+                              onClick={() => onDeleteGroup(meta)}
+                              className="action-btn"
+                              style={{ color: '#ef4444' }}
+                              title="Delete Group"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
 
                   {/* Expanded group rows */}
                   {isExpanded &&
-                    groupLevels.map((gold) => {
-                      const isHidden = Boolean(gold.hidden);
-                      return (
-                        <tr
-                          key={gold.id}
-                          style={{
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                            background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.06)' : 'rgba(0, 0, 0, 0.25)',
-                            transition: 'background 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = isHidden && isAdmin
-                              ? 'rgba(239, 68, 68, 0.1)'
-                              : 'rgba(255, 255, 255, 0.04)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = isHidden && isAdmin
-                              ? 'rgba(239, 68, 68, 0.06)'
-                              : 'rgba(0, 0, 0, 0.25)';
-                          }}
-                        >
-                          {/* Level Name */}
-                          <td style={{ padding: '0.75rem 1.15rem 0.75rem 3rem', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>↳</span>
-                              <span style={{ color: '#f3f4f6', fontWeight: 600, fontSize: '0.98rem' }}>
-                                {gold.name}
-                              </span>
-                              {isHidden && isAdmin && (
-                                <span
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.2)',
-                                    color: '#ef4444',
-                                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                                    padding: '0.05rem 0.4rem',
-                                    borderRadius: '4px',
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    textTransform: 'uppercase',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.2rem',
-                                  }}
-                                >
-                                  <EyeOff size={10} /> Hidden
+                    (groupLevels.length > 0 ? (
+                      groupLevels.map((gold) => {
+                        const isHidden = Boolean(gold.hidden);
+                        return (
+                          <tr
+                            key={gold.id}
+                            style={{
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                              background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.06)' : 'rgba(0, 0, 0, 0.25)',
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = isHidden && isAdmin
+                                ? 'rgba(239, 68, 68, 0.1)'
+                                : 'rgba(255, 255, 255, 0.04)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = isHidden && isAdmin
+                                ? 'rgba(239, 68, 68, 0.06)'
+                                : 'rgba(0, 0, 0, 0.25)';
+                            }}
+                          >
+                            {/* Level Name */}
+                            <td style={{ padding: '0.75rem 1.15rem 0.75rem 3rem', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>↳</span>
+                                <span style={{ color: '#f3f4f6', fontWeight: 600, fontSize: '0.98rem' }}>
+                                  {gold.name}
                                 </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Status */}
-                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {renderStatusBadge(gold.completed)}
-                          </td>
-
-                          {/* Difficulty */}
-                          <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
-                            {renderDifficultyBadge(gold.difficulty)}
-                          </td>
-
-                          {/* Date */}
-                          <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
-                            <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                              <Calendar size={13} />
-                              {gold.date || 'Initial'}
-                            </span>
-                          </td>
-
-                          {/* Attempts */}
-                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {gold.attempts != null && gold.attempts !== undefined ? (
-                              <span
-                                style={{
-                                  display: 'inline-block',
-                                  minWidth: '3.6rem',
-                                  maxWidth: '5.2rem',
-                                  background: 'rgba(255, 255, 255, 0.04)',
-                                  border: '1px solid var(--border)',
-                                  padding: '0.15rem 0.4rem',
-                                  borderRadius: '6px',
-                                  fontWeight: 700,
-                                  color: '#fff',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  fontSize: '0.82rem',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                {gold.attempts.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
-                            )}
-                          </td>
-
-                          {/* Clip */}
-                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {gold.clip ? (
-                              <a
-                                href={gold.clip}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="clip-icon-link"
-                                title="Watch Video"
-                              >
-                                <Youtube size={18} />
-                              </a>
-                            ) : (
-                              <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
-                            )}
-                          </td>
-
-                          {/* Actions */}
-                          {isAdmin && (
-                            <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEdit(gold);
-                                  }}
-                                  className="action-btn"
-                                  style={{ color: '#84cc16' }}
-                                  title="Edit"
-                                >
-                                  <Edit3 size={15} />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete(gold.id!);
-                                  }}
-                                  className="action-btn"
-                                  style={{ color: '#ef4444' }}
-                                  title="Delete"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                                {isHidden && isAdmin && (
+                                  <span
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.2)',
+                                      color: '#ef4444',
+                                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                                      padding: '0.05rem 0.4rem',
+                                      borderRadius: '4px',
+                                      fontSize: '0.65rem',
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.2rem',
+                                    }}
+                                  >
+                                    <EyeOff size={10} /> Hidden
+                                  </span>
+                                )}
                               </div>
                             </td>
+
+                            {/* Status */}
+                            <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              {renderStatusBadge(gold.completed)}
+                            </td>
+
+                            {/* Difficulty */}
+                            <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
+                              {renderDifficultyBadge(gold.difficulty)}
+                            </td>
+
+                            {/* Date */}
+                            <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
+                              <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                                <Calendar size={13} />
+                                {gold.date || 'Initial'}
+                              </span>
+                            </td>
+
+                            {/* Attempts */}
+                            <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              {gold.attempts != null && gold.attempts !== undefined ? (
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    minWidth: '3.6rem',
+                                    maxWidth: '5.2rem',
+                                    background: 'rgba(255, 255, 255, 0.04)',
+                                    border: '1px solid var(--border)',
+                                    padding: '0.15rem 0.4rem',
+                                    borderRadius: '6px',
+                                    fontWeight: 700,
+                                    color: '#fff',
+                                    fontVariantNumeric: 'tabular-nums',
+                                    fontSize: '0.82rem',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {gold.attempts.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                              )}
+                            </td>
+
+                            {/* Clip */}
+                            <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              {gold.clip ? (
+                                <a
+                                  href={gold.clip}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="clip-icon-link"
+                                  title="Watch Video"
+                                >
+                                  <Youtube size={18} />
+                                </a>
+                              ) : (
+                                <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            {isAdmin && (
+                              <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEdit(gold);
+                                    }}
+                                    className="action-btn"
+                                    style={{ color: '#84cc16' }}
+                                    title="Edit Level"
+                                  >
+                                    <Edit3 size={15} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDelete(gold.id!);
+                                    }}
+                                    className="action-btn"
+                                    style={{ color: '#ef4444' }}
+                                    title="Delete Level"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={isAdmin ? 7 : 6}
+                          style={{
+                            padding: '1rem 3rem',
+                            color: 'var(--text-secondary)',
+                            fontSize: '0.85rem',
+                            fontStyle: 'italic',
+                            background: 'rgba(0, 0, 0, 0.2)',
+                          }}
+                        >
+                          No levels in this group yet.{' '}
+                          {isAdmin && (
+                            <button
+                              onClick={() => onAddLevelToGroup(item.groupName)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--accent)',
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                                textDecoration: 'underline',
+                                marginLeft: '0.25rem',
+                              }}
+                            >
+                              Add a level now
+                            </button>
                           )}
-                        </tr>
-                      );
-                    })}
+                        </td>
+                      </tr>
+                    ))}
                 </React.Fragment>
               );
             })}

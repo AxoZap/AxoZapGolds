@@ -1,0 +1,145 @@
+import { useState } from 'react';
+import { LevelGroup } from '../App';
+import { Layers, X } from 'lucide-react';
+
+interface AddGroupModalProps {
+  onAdd: (group: Omit<LevelGroup, 'id'>) => void;
+  onCancel: () => void;
+}
+
+export function AddGroupModal({ onAdd, onCancel }: AddGroupModalProps) {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    url: '',
+    attempts: '',
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!formData.name.trim()) {
+      errs.name = 'Group name is required (e.g. Farewell, SJ Intermediate)';
+    }
+    if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
+      errs.attempts = 'Attempts must be a non-negative number';
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validate()) {
+      const attemptsNum =
+        formData.attempts.trim() === '' ? null : Number(formData.attempts);
+
+      onAdd({
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+        date: formData.date.trim() || null,
+        url: formData.url.trim() || null,
+        attempts: attemptsNum,
+      });
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Layers size={22} color="var(--accent)" />
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Create New Group</h2>
+          </div>
+          <button
+            onClick={onCancel}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* Name */}
+          <div className="form-group">
+            <label className="form-label">Group Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="form-input"
+              placeholder="e.g. Farewell, Strawberry Jam, SJ Advanced"
+              autoFocus
+            />
+            {errors.name && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.name}</p>}
+          </div>
+
+          {/* Description */}
+          <div className="form-group">
+            <label className="form-label">Description (Optional)</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="form-input"
+              placeholder="Brief description or notes about this level group / colab..."
+              rows={3}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+
+          <div className="form-row">
+            {/* Date */}
+            <div className="form-group">
+              <label className="form-label">Date (Optional)</label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="form-input"
+              />
+            </div>
+
+            {/* Attempts */}
+            <div className="form-group">
+              <label className="form-label">Group Attempts (Optional)</label>
+              <input
+                type="number"
+                min="0"
+                max="9999999"
+                value={formData.attempts}
+                onChange={(e) => setFormData({ ...formData, attempts: e.target.value })}
+                className="form-input"
+                placeholder="Total attempts (e.g. 5000)"
+              />
+              {errors.attempts && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.attempts}</p>}
+            </div>
+          </div>
+
+          {/* Group URL */}
+          <div className="form-group">
+            <label className="form-label">Group URL / Video / Sheet URL (Optional)</label>
+            <input
+              type="url"
+              value={formData.url}
+              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+              className="form-input"
+              placeholder="https://youtu.be/... or playlist / spreadsheet link"
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+            <button type="button" onClick={onCancel} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Create Group
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

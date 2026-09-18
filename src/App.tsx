@@ -3,8 +3,10 @@ import { GoldList } from './components/GoldList';
 import { GoldFilters, FilterState } from './components/GoldFilters';
 import { AddGoldModal } from './components/AddGoldModal';
 import { EditGoldModal } from './components/EditGoldModal';
+import { AddGroupModal } from './components/AddGroupModal';
+import { EditGroupModal } from './components/EditGroupModal';
 import { adminHeaders, getCFAccessToken } from './adminAuth';
-import { Sparkles, Plus, Unlock, Loader2 } from 'lucide-react';
+import { Sparkles, Plus, Layers, Unlock, Loader2 } from 'lucide-react';
 
 export interface Gold {
   id?: number | string;
@@ -20,6 +22,16 @@ export interface Gold {
   created_at?: string;
 }
 
+export interface LevelGroup {
+  id?: number | string;
+  name: string;
+  description?: string | null;
+  date?: string | null;
+  url?: string | null;
+  attempts?: number | null;
+  created_at?: string;
+}
+
 const API_URL = "https://axozap-golds-backend.peteystillwell.workers.dev/api";
 
 export default function App() {
@@ -27,9 +39,16 @@ export default function App() {
   const isAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/admin');
 
   const [golds, setGolds] = useState<Gold[]>([]);
+  const [groups, setGroups] = useState<LevelGroup[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
+  const [targetGroupForAdd, setTargetGroupForAdd] = useState<string>('');
   const [editingGold, setEditingGold] = useState<Gold | null>(null);
+
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<LevelGroup | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     difficulty: 'All',
@@ -42,10 +61,10 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
-    loadGolds();
+    loadData();
   }, []);
 
-  const loadGolds = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
       const headers: Record<string, string> = {};
@@ -54,20 +73,32 @@ export default function App() {
         if (token) headers['cf-access-jwt-assertion'] = token;
       }
 
-      const response = await fetch(`${API_URL}/golds`, { headers });
-      if (response.ok) {
-        const data = await response.json();
-        setGolds(data);
+      const [goldsRes, groupsRes] = await Promise.all([
+        fetch(`${API_URL}/golds`, { headers }),
+        fetch(`${API_URL}/groups`, { headers }),
+      ]);
+
+      if (goldsRes.ok) {
+        const goldsData = await goldsRes.json();
+        setGolds(goldsData);
       } else {
-        console.error('Failed to load golds:', await response.text());
+        console.error('Failed to load golds:', await goldsRes.text());
+      }
+
+      if (groupsRes.ok) {
+        const groupsData = await groupsRes.json();
+        setGroups(groupsData);
+      } else {
+        console.error('Failed to load groups:', await groupsRes.text());
       }
     } catch (error) {
-      console.error('Error loading golds:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Level Handlers
   const handleAddGold = async (gold: Omit<Gold, 'id'>) => {
     try {
       const response = await fetch(`${API_URL}/golds`, {
@@ -78,8 +109,9 @@ export default function App() {
 
       if (response.ok) {
         const newGold = await response.json();
-        setGolds([...golds, newGold]);
+        setGolds((prev) => [...prev, newGold]);
         setShowAddModal(false);
+        setTargetGroupForAdd('');
       } else {
         const err = await response.json();
         alert(err.error || 'Failed to add golden strawberry.');
@@ -90,7 +122,7 @@ export default function App() {
     }
   };
 
-  const handleSaveEdit = async (updatedGold: Gold) => {
+  const handleSaveEditGold = async (updatedGold: Gold) => {
     try {
       const response = await fetch(`${API_URL}/golds/${updatedGold.id}`, {
         method: 'PUT',
@@ -100,7 +132,7 @@ export default function App() {
 
       if (response.ok) {
         const saved = await response.json();
-        setGolds(golds.map((g) => (g.id === saved.id ? saved : g)));
+        setGolds((prev) => prev.map((g) => (g.id === saved.id ? saved : g)));
         setEditingGold(null);
       } else {
         const err = await response.json();
@@ -118,7 +150,7 @@ export default function App() {
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this golden strawberry?')) {
+    if (!confirm('Are you sure you want to delete this level?')) {
       return;
     }
 
@@ -129,7 +161,7 @@ export default function App() {
       });
 
       if (response.ok) {
-        setGolds(golds.filter((g) => g.id !== id));
+        setGolds((prev) => prev.filter((g) => g.id !== id));
       } else {
         const err = await response.json();
         alert(err.error || 'Failed to delete gold.');
@@ -138,6 +170,96 @@ export default function App() {
       console.error('Error deleting gold:', error);
       alert('Failed to delete gold.');
     }
+  };
+
+  // Group Handlers
+  const handleAddGroup = async (group: Omit<LevelGroup, 'id'>) => {
+    try {
+      const response = await fetch(`${API_URL}/groups`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ group }),
+      });
+
+      if (response.ok) {
+        const newGroup = await response.json();
+        setGroups((prev) => [...prev, newGroup]);
+        setShowAddGroupModal(false);
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Failed to create group.');
+      }
+    } catch (error) {
+      console.error('Error adding group:', error);
+      alert('Failed to create group. Please try again.');
+    }
+  };
+
+  const handleSaveEditGroup = async (updatedGroup: LevelGroup) => {
+    try {
+      const response = await fetch(`${API_URL}/groups/${updatedGroup.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ group: updatedGroup }),
+      });
+
+      if (response.ok) {
+        const saved: LevelGroup = await response.json();
+        const oldGroup = groups.find((g) => g.id === saved.id);
+
+        setGroups((prev) => prev.map((g) => (g.id === saved.id ? saved : g)));
+        if (oldGroup && oldGroup.name !== saved.name) {
+          // Sync group_name locally on levels
+          setGolds((prev) =>
+            prev.map((g) => (g.group_name === oldGroup.name ? { ...g, group_name: saved.name } : g))
+          );
+        }
+        setEditingGroup(null);
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Failed to update group.');
+      }
+    } catch (error) {
+      console.error('Error updating group:', error);
+      alert('Failed to update group.');
+    }
+  };
+
+  const handleDeleteGroup = async (group: LevelGroup) => {
+    if (!isAdmin) {
+      alert('You must be in Admin mode to delete.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete group "${group.name}"? Levels inside will be ungrouped.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/groups/${group.id}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+      });
+
+      if (response.ok) {
+        setGroups((prev) => prev.filter((g) => g.id !== group.id));
+        setGolds((prev) =>
+          prev.map((g) => (g.group_name === group.name ? { ...g, group_name: null } : g))
+        );
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Failed to delete group.');
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      alert('Failed to delete group.');
+    }
+  };
+
+  // Open Add Level specifically for a group
+  const handleAddLevelToGroup = (groupName: string) => {
+    setTargetGroupForAdd(groupName);
+    setShowAddModal(true);
   };
 
   // Filter and Sort Logic
@@ -209,6 +331,12 @@ export default function App() {
       });
   }, [golds, filters, sortBy, sortOrder]);
 
+  const existingGroupNames = useMemo(() => {
+    const fromGolds = golds.map((g) => g.group_name?.trim()).filter(Boolean) as string[];
+    const fromGroups = groups.map((g) => g.name.trim()).filter(Boolean);
+    return Array.from(new Set([...fromGroups, ...fromGolds]));
+  }, [golds, groups]);
+
   return (
     <div className="container">
       {/* Header */}
@@ -227,10 +355,24 @@ export default function App() {
 
       {/* Admin Action Bar (only shown on /admin) */}
       {isAdmin && (
-        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              setTargetGroupForAdd('');
+              setShowAddModal(true);
+            }}
+            className="btn btn-primary"
+          >
             <Plus size={18} />
             Add Golden
+          </button>
+          <button
+            onClick={() => setShowAddGroupModal(true)}
+            className="btn btn-secondary"
+            style={{ borderColor: 'var(--accent)', color: '#fff' }}
+          >
+            <Layers size={18} color="var(--accent)" />
+            Add Group
           </button>
         </div>
       )}
@@ -239,17 +381,36 @@ export default function App() {
       {showAddModal && (
         <AddGoldModal
           onAdd={handleAddGold}
-          onCancel={() => setShowAddModal(false)}
-          existingGroups={Array.from(new Set(golds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]))}
+          onCancel={() => {
+            setShowAddModal(false);
+            setTargetGroupForAdd('');
+          }}
+          existingGroups={existingGroupNames}
+          defaultGroupName={targetGroupForAdd}
         />
       )}
 
       {editingGold && (
         <EditGoldModal
           gold={editingGold}
-          onSave={handleSaveEdit}
+          onSave={handleSaveEditGold}
           onCancel={() => setEditingGold(null)}
-          existingGroups={Array.from(new Set(golds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]))}
+          existingGroups={existingGroupNames}
+        />
+      )}
+
+      {showAddGroupModal && (
+        <AddGroupModal
+          onAdd={handleAddGroup}
+          onCancel={() => setShowAddGroupModal(false)}
+        />
+      )}
+
+      {editingGroup && (
+        <EditGroupModal
+          group={editingGroup}
+          onSave={handleSaveEditGroup}
+          onCancel={() => setEditingGroup(null)}
         />
       )}
 
@@ -278,8 +439,12 @@ export default function App() {
         <GoldList
           golds={filteredGolds}
           allGolds={golds}
+          groups={groups}
           onDelete={handleDeleteGold}
           onEdit={(gold) => setEditingGold(gold)}
+          onEditGroup={(group) => setEditingGroup(group)}
+          onDeleteGroup={handleDeleteGroup}
+          onAddLevelToGroup={handleAddLevelToGroup}
           isAdmin={isAdmin}
         />
       )}
