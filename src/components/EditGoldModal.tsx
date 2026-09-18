@@ -6,9 +6,10 @@ interface EditGoldModalProps {
   gold: Gold;
   onSave: (gold: Gold) => void;
   onCancel: () => void;
+  existingGroups?: string[];
 }
 
-export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
+export function EditGoldModal({ gold, onSave, onCancel, existingGroups = [] }: EditGoldModalProps) {
   // Parse initial difficulty
   const initialDiff = gold.difficulty || 'Beginner';
   let initialBase = initialDiff;
@@ -26,8 +27,9 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
   const initialDate = gold.date && gold.date !== 'Initial' ? gold.date : todayStr;
 
   const [formData, setFormData] = useState({
-    placement: gold.placement != null ? String(gold.placement) : '',
     name: gold.name,
+    group_name: gold.group_name || '',
+    completed: gold.completed !== false,
     baseDifficulty: initialBase,
     gmModifier: initialMod,
     date: initialDate,
@@ -49,9 +51,6 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
     if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
       errs.attempts = 'Attempts must be a non-negative number';
     }
-    if (formData.placement && (isNaN(Number(formData.placement)) || Number(formData.placement) < 1)) {
-      errs.placement = 'Placement must be a positive integer';
-    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -61,8 +60,6 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
     if (validate()) {
       const attemptsNum =
         formData.attempts.trim() === '' ? null : Number(formData.attempts);
-      const placementNum =
-        formData.placement.trim() === '' ? gold.placement : Number(formData.placement);
 
       let finalDifficulty = formData.baseDifficulty;
       if (formData.baseDifficulty === 'GM' && formData.gmModifier.trim()) {
@@ -72,8 +69,9 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
 
       onSave({
         ...gold,
-        placement: placementNum,
         name: formData.name.trim(),
+        group_name: formData.group_name.trim() || null,
+        completed: formData.completed,
         difficulty: finalDifficulty,
         date: formData.date.trim(),
         attempts: attemptsNum,
@@ -89,7 +87,7 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Edit3 size={20} color="var(--accent)" />
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Edit Golden #{gold.placement}</h2>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Edit Golden: {gold.name}</h2>
           </div>
           <button
             onClick={onCancel}
@@ -101,19 +99,6 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
 
         <form onSubmit={handleSubmit}>
           <div className="form-row">
-            {/* Placement */}
-            <div className="form-group">
-              <label className="form-label">Rank / Order</label>
-              <input
-                type="number"
-                min="1"
-                value={formData.placement}
-                onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
-                className="form-input"
-              />
-              {errors.placement && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.placement}</p>}
-            </div>
-
             {/* Name */}
             <div className="form-group">
               <label className="form-label">Name *</label>
@@ -124,6 +109,24 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
                 className="form-input"
               />
               {errors.name && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.name}</p>}
+            </div>
+
+            {/* Group Name */}
+            <div className="form-group">
+              <label className="form-label">Group Name (Optional)</label>
+              <input
+                type="text"
+                list="edit-existing-groups-list"
+                value={formData.group_name}
+                onChange={(e) => setFormData({ ...formData, group_name: e.target.value })}
+                className="form-input"
+                placeholder="e.g. Farewell, Strawberry Jam, SJ Intermediate"
+              />
+              <datalist id="edit-existing-groups-list">
+                {existingGroups.map((grp) => (
+                  <option key={grp} value={grp} />
+                ))}
+              </datalist>
             </div>
           </div>
 
@@ -199,7 +202,6 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
                 value={formData.attempts}
                 onChange={(e) => setFormData({ ...formData, attempts: e.target.value })}
                 className="form-input"
-                style={{ maxWidth: '140px' }}
                 placeholder="e.g. 1250"
               />
               {errors.attempts && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.attempts}</p>}
@@ -218,18 +220,34 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
             </div>
           </div>
 
-          {/* Hidden */}
-          <div className="form-group">
-            <label className="form-checkbox">
-              <input
-                type="checkbox"
-                checked={formData.hidden}
-                onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
-              />
-              <span style={{ color: formData.hidden ? 'var(--red)' : 'var(--text-primary)', fontWeight: 600 }}>
-                Hidden (only visible to admin)
-              </span>
-            </label>
+          <div className="form-row" style={{ marginTop: '0.5rem' }}>
+            {/* Completed */}
+            <div className="form-group">
+              <label className="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={formData.completed}
+                  onChange={(e) => setFormData({ ...formData, completed: e.target.checked })}
+                />
+                <span style={{ color: formData.completed ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 600 }}>
+                  Completed ({formData.completed ? 'Yes' : 'In Progress'})
+                </span>
+              </label>
+            </div>
+
+            {/* Hidden */}
+            <div className="form-group">
+              <label className="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={formData.hidden}
+                  onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+                />
+                <span style={{ color: formData.hidden ? 'var(--red)' : 'var(--text-primary)', fontWeight: 600 }}>
+                  Hidden (only visible to admin)
+                </span>
+              </label>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>

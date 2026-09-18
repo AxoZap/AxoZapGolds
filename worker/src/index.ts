@@ -17,6 +17,8 @@ export type Gold = {
   attempts?: number | null;
   clip?: string | null;
   hidden?: boolean | number;
+  group_name?: string | null;
+  completed?: boolean | number;
   created_at?: string;
 };
 
@@ -129,6 +131,8 @@ function formatGold(row: any): Gold {
     attempts: row.attempts != null && row.attempts !== "" ? Number(row.attempts) : null,
     clip: row.clip || null,
     hidden: Boolean(row.hidden),
+    group_name: row.group_name ? String(row.group_name).trim() : null,
+    completed: row.completed === 0 || row.completed === false ? false : true,
     created_at: row.created_at,
   };
 }
@@ -142,23 +146,13 @@ async function handleGetGolds(c: any) {
   const admin = await isAuthorized(c);
   const db = c.env.axozap_golds_db;
 
-  let query = "SELECT * FROM golds ORDER BY placement ASC, id ASC";
+  let query = "SELECT * FROM golds ORDER BY id ASC";
   if (!admin) {
-    query = "SELECT * FROM golds WHERE hidden = 0 ORDER BY placement ASC, id ASC";
+    query = "SELECT * FROM golds WHERE hidden = 0 ORDER BY id ASC";
   }
 
   const { results } = await db.prepare(query).all();
   const list = (results || []).map(formatGold);
-
-  if (!admin) {
-    // Sanitize sequential placement numbers for public view
-    return c.json(
-      list.map((item: Gold, index: number) => ({
-        ...item,
-        placement: index + 1,
-      }))
-    );
-  }
 
   return c.json(list);
 }
@@ -193,12 +187,14 @@ async function handlePostGold(c: any) {
       : null;
   const clip = gold.clip ? String(gold.clip).trim() : null;
   const hidden = gold.hidden ? 1 : 0;
+  const group_name = gold.group_name && String(gold.group_name).trim() ? String(gold.group_name).trim() : null;
+  const completed = gold.completed === false || gold.completed === 0 ? 0 : 1;
 
   const result = await db
     .prepare(
-      "INSERT INTO golds (placement, name, difficulty, date, attempts, clip, hidden) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO golds (placement, name, difficulty, date, attempts, clip, hidden, group_name, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .bind(placement, name, difficulty, date, attempts, clip, hidden)
+    .bind(placement, name, difficulty, date, attempts, clip, hidden, group_name, completed)
     .run();
 
   const newId = result.meta?.last_row_id;
@@ -207,7 +203,7 @@ async function handlePostGold(c: any) {
     .bind(newId)
     .first();
 
-  return c.json(formatGold(created || { id: newId, placement, name, difficulty, date, attempts, clip, hidden }), 201);
+  return c.json(formatGold(created || { id: newId, placement, name, difficulty, date, attempts, clip, hidden, group_name, completed }), 201);
 }
 
 app.post("/golds", handlePostGold);
@@ -234,20 +230,22 @@ async function handlePutGold(c: any) {
   const clip = gold.clip ? String(gold.clip).trim() : null;
   const hidden = gold.hidden ? 1 : 0;
   const placement = gold.placement != null ? Number(gold.placement) : null;
+  const group_name = gold.group_name && String(gold.group_name).trim() ? String(gold.group_name).trim() : null;
+  const completed = gold.completed === false || gold.completed === 0 ? 0 : 1;
 
   if (placement != null) {
     await db
       .prepare(
-        "UPDATE golds SET placement = ?, name = ?, difficulty = ?, date = ?, attempts = ?, clip = ?, hidden = ? WHERE id = ?"
+        "UPDATE golds SET placement = ?, name = ?, difficulty = ?, date = ?, attempts = ?, clip = ?, hidden = ?, group_name = ?, completed = ? WHERE id = ?"
       )
-      .bind(placement, name, difficulty, date, attempts, clip, hidden, id)
+      .bind(placement, name, difficulty, date, attempts, clip, hidden, group_name, completed, id)
       .run();
   } else {
     await db
       .prepare(
-        "UPDATE golds SET name = ?, difficulty = ?, date = ?, attempts = ?, clip = ?, hidden = ? WHERE id = ?"
+        "UPDATE golds SET name = ?, difficulty = ?, date = ?, attempts = ?, clip = ?, hidden = ?, group_name = ?, completed = ? WHERE id = ?"
       )
-      .bind(name, difficulty, date, attempts, clip, hidden, id)
+      .bind(name, difficulty, date, attempts, clip, hidden, group_name, completed, id)
       .run();
   }
 

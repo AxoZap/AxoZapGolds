@@ -2,7 +2,7 @@ import { Filter, ArrowUpDown, Search } from 'lucide-react';
 
 export interface FilterState {
   difficulty: string;
-  side: string;
+  groupFilter: 'All' | 'Grouped' | 'Ungrouped';
   hasClip: boolean;
   searchQuery: string;
 }
@@ -10,8 +10,8 @@ export interface FilterState {
 interface GoldFiltersProps {
   filters: FilterState;
   onFiltersChange: (filters: FilterState) => void;
-  sortBy: 'order' | 'name' | 'date' | 'difficulty' | 'attempts';
-  onSortChange: (sortBy: 'order' | 'name' | 'date' | 'difficulty' | 'attempts') => void;
+  sortBy: 'name' | 'date' | 'difficulty' | 'attempts';
+  onSortChange: (sortBy: 'name' | 'date' | 'difficulty' | 'attempts') => void;
   sortOrder: 'asc' | 'desc';
   onSortOrderChange: (order: 'asc' | 'desc') => void;
 }
@@ -53,18 +53,17 @@ export function GoldFilters({
           </select>
         </div>
 
-        {/* Side Filter */}
+        {/* Group Filter */}
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Side / Chapter</label>
+          <label className="form-label">Group / Standalone</label>
           <select
-            value={filters.side}
-            onChange={(e) => onFiltersChange({ ...filters, side: e.target.value })}
+            value={filters.groupFilter}
+            onChange={(e) => onFiltersChange({ ...filters, groupFilter: e.target.value as any })}
             className="form-select"
           >
-            <option value="All">All Sides</option>
-            <option value="A">A-Sides</option>
-            <option value="B">B-Sides</option>
-            <option value="C">C-Sides</option>
+            <option value="All">All Levels</option>
+            <option value="Grouped">In a Group</option>
+            <option value="Ungrouped">Not in a Group</option>
           </select>
         </div>
 
@@ -76,11 +75,10 @@ export function GoldFilters({
             onChange={(e) => onSortChange(e.target.value as any)}
             className="form-select"
           >
-            <option value="order">Order (Rank)</option>
+            <option value="date">Date</option>
             <option value="name">Name</option>
             <option value="difficulty">Difficulty</option>
             <option value="attempts">Attempts</option>
-            <option value="date">Date</option>
           </select>
         </div>
 

@@ -1,5 +1,6 @@
+import React, { useState } from 'react';
 import { Gold } from '../App';
-import { Calendar, Hash, Youtube, Edit3, Trash2, EyeOff } from 'lucide-react';
+import { Calendar, Youtube, Edit3, Trash2, EyeOff, CheckCircle2, Circle, ChevronDown, ChevronRight, Layers } from 'lucide-react';
 
 interface GoldListProps {
   golds: Gold[];
@@ -7,19 +8,20 @@ interface GoldListProps {
   onDelete: (id: string | number) => void;
   onEdit: (gold: Gold) => void;
   isAdmin: boolean;
-  showFilteredRanks: boolean;
-  onToggleRanks: () => void;
 }
+
+type ListItem =
+  | { type: 'standalone'; gold: Gold }
+  | { type: 'group'; groupName: string; golds: Gold[]; representative: Gold };
 
 export function GoldList({
   golds,
-  allGolds,
   onDelete,
   onEdit,
   isAdmin,
-  showFilteredRanks,
-  onToggleRanks,
 }: GoldListProps) {
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
   if (golds.length === 0) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-secondary)' }}>
@@ -28,7 +30,35 @@ export function GoldList({
     );
   }
 
-  const isFiltered = golds.length !== allGolds.length;
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }));
+  };
+
+  // Grouping logic preserving the current filtered & sorted order
+  const displayItems: ListItem[] = [];
+  const processedGroups = new Set<string>();
+
+  for (const gold of golds) {
+    const grp = gold.group_name?.trim();
+    if (!grp) {
+      displayItems.push({ type: 'standalone', gold });
+    } else {
+      if (!processedGroups.has(grp)) {
+        processedGroups.add(grp);
+        // All members in this group from the current filtered list
+        const groupMembers = golds.filter((g) => g.group_name?.trim() === grp);
+        displayItems.push({
+          type: 'group',
+          groupName: grp,
+          golds: groupMembers,
+          representative: gold,
+        });
+      }
+    }
+  }
 
   const thStyle: React.CSSProperties = {
     padding: '0.9rem 1.15rem',
@@ -39,39 +69,70 @@ export function GoldList({
     letterSpacing: '0.05em',
   };
 
+  const renderStatusBadge = (completed: boolean | undefined) => {
+    const isDone = completed !== false;
+    return isDone ? (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.3rem',
+          color: '#10b981',
+          background: 'rgba(16, 185, 129, 0.12)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          padding: '0.15rem 0.5rem',
+          borderRadius: '9999px',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+        }}
+      >
+        <CheckCircle2 size={13} />
+        Done
+      </span>
+    ) : (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.3rem',
+          color: 'var(--text-secondary)',
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '1px solid var(--border)',
+          padding: '0.15rem 0.5rem',
+          borderRadius: '9999px',
+          fontSize: '0.75rem',
+          fontWeight: 600,
+        }}
+      >
+        <Circle size={13} />
+        In Progress
+      </span>
+    );
+  };
+
+  const renderDifficultyBadge = (difficulty: string) => {
+    const d = (difficulty || 'beginner').trim().toLowerCase();
+    let diffClass = 'tag-beginner';
+    if (d.startsWith('gm')) diffClass = 'tag-gm';
+    else if (d.startsWith('beg')) diffClass = 'tag-beginner';
+    else if (d.startsWith('int')) diffClass = 'tag-intermediate';
+    else if (d.startsWith('adv')) diffClass = 'tag-advanced';
+    else if (d.startsWith('exp')) diffClass = 'tag-expert';
+
+    return <span className={`tag ${diffClass}`}>{difficulty}</span>;
+  };
+
   return (
     <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-              {/* Rank */}
-              <th style={thStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  Rank
-                  {isFiltered && (
-                    <button
-                      onClick={onToggleRanks}
-                      title={showFilteredRanks ? 'Showing filtered ranks — click for original' : 'Showing original ranks — click for filtered'}
-                      style={{
-                        background: showFilteredRanks ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.06)',
-                        border: `1px solid ${showFilteredRanks ? 'var(--accent)' : 'var(--border)'}`,
-                        borderRadius: '4px',
-                        padding: '0.1rem 0.35rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      <Hash size={11} color={showFilteredRanks ? 'var(--accent)' : 'var(--text-secondary)'} />
-                    </button>
-                  )}
-                </div>
-              </th>
+              {/* Level / Group Name */}
+              <th style={thStyle}>Level / Group</th>
 
-              {/* Name */}
-              <th style={thStyle}>Name</th>
+              {/* Status */}
+              <th style={{ ...thStyle, textAlign: 'center', width: '120px' }}>Status</th>
 
               {/* Difficulty */}
               <th style={thStyle}>Difficulty</th>
@@ -83,155 +144,454 @@ export function GoldList({
               <th style={{ ...thStyle, textAlign: 'center', width: '110px' }}>Attempts</th>
 
               {/* Clip */}
-              <th style={{ ...thStyle, textAlign: 'center' }}>Clip</th>
+              <th style={{ ...thStyle, textAlign: 'center', width: '80px' }}>Clip</th>
 
               {/* Actions (Admin only) */}
-              {isAdmin && <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>}
+              {isAdmin && <th style={{ ...thStyle, textAlign: 'center', width: '100px' }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {golds.map((gold, index) => {
-              const isHidden = Boolean(gold.hidden);
-              const d = (gold.difficulty || 'beginner').trim().toLowerCase();
-              let diffClass = 'tag-beginner';
-              if (d.startsWith('gm')) diffClass = 'tag-gm';
-              else if (d.startsWith('beg')) diffClass = 'tag-beginner';
-              else if (d.startsWith('int')) diffClass = 'tag-intermediate';
-              else if (d.startsWith('adv')) diffClass = 'tag-advanced';
-              else if (d.startsWith('exp')) diffClass = 'tag-expert';
+            {displayItems.map((item) => {
+              if (item.type === 'standalone') {
+                const gold = item.gold;
+                const isHidden = Boolean(gold.hidden);
 
-              return (
-                <tr
-                  key={gold.id}
-                  style={{
-                    borderBottom: '1px solid var(--border)',
-                    transition: 'background 0.15s ease',
-                    background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.05)' : undefined,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background =
-                      isHidden && isAdmin ? 'rgba(239, 68, 68, 0.09)' : 'var(--bg-hover)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background =
-                      isHidden && isAdmin ? 'rgba(239, 68, 68, 0.05)' : 'transparent';
-                  }}
-                >
-                  {/* Rank */}
-                  <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-secondary)' }}>
-                      #{showFilteredRanks ? index + 1 : (gold.placement || index + 1)}
-                    </span>
-                  </td>
-
-                  {/* Name */}
-                  <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.02em' }}>
-                        {gold.name}
-                      </span>
-                      {isHidden && isAdmin && (
-                        <span
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.2)',
-                            color: '#ef4444',
-                            border: '1px solid rgba(239, 68, 68, 0.4)',
-                            padding: '0.1rem 0.45rem',
-                            borderRadius: '4px',
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                          }}
-                        >
-                          <EyeOff size={11} /> Hidden
+                return (
+                  <tr
+                    key={gold.id}
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      transition: 'background 0.15s ease',
+                      background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.05)' : undefined,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background =
+                        isHidden && isAdmin ? 'rgba(239, 68, 68, 0.09)' : 'var(--bg-hover)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background =
+                        isHidden && isAdmin ? 'rgba(239, 68, 68, 0.05)' : 'transparent';
+                    }}
+                  >
+                    {/* Name */}
+                    <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.02em' }}>
+                          {gold.name}
                         </span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Difficulty */}
-                  <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                    <span className={`tag ${diffClass}`}>{gold.difficulty}</span>
-                  </td>
-
-                  {/* Date */}
-                  <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                    <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                      <Calendar size={13} />
-                      {gold.date || 'Initial'}
-                    </span>
-                  </td>
-
-                  {/* Attempts (Smaller box, max like 6 digits size) */}
-                  <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    {gold.attempts != null && gold.attempts !== undefined ? (
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          minWidth: '3.6rem',
-                          maxWidth: '5.2rem',
-                          background: 'rgba(255, 255, 255, 0.04)',
-                          border: '1px solid var(--border)',
-                          padding: '0.2rem 0.45rem',
-                          borderRadius: '6px',
-                          fontWeight: 700,
-                          color: '#fff',
-                          fontVariantNumeric: 'tabular-nums',
-                          fontSize: '0.85rem',
-                          textAlign: 'center',
-                        }}
-                      >
-                        {gold.attempts.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Clip */}
-                  <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    {gold.clip ? (
-                      <a
-                        href={gold.clip}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="clip-icon-link"
-                        title="Watch Video"
-                      >
-                        <Youtube size={19} />
-                      </a>
-                    ) : (
-                      <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Actions (Admin only) */}
-                  {isAdmin && (
-                    <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <button
-                          onClick={() => onEdit(gold)}
-                          className="action-btn"
-                          style={{ color: '#84cc16' }}
-                          title="Edit"
-                        >
-                          <Edit3 size={16} />
-                        </button>
-                        <button
-                          onClick={() => onDelete(gold.id!)}
-                          className="action-btn"
-                          style={{ color: '#ef4444' }}
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isHidden && isAdmin && (
+                          <span
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              color: '#ef4444',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              padding: '0.1rem 0.45rem',
+                              borderRadius: '4px',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                            }}
+                          >
+                            <EyeOff size={11} /> Hidden
+                          </span>
+                        )}
                       </div>
                     </td>
-                  )}
-                </tr>
+
+                    {/* Status */}
+                    <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {renderStatusBadge(gold.completed)}
+                    </td>
+
+                    {/* Difficulty */}
+                    <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      {renderDifficultyBadge(gold.difficulty)}
+                    </td>
+
+                    {/* Date */}
+                    <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                        <Calendar size={13} />
+                        {gold.date || 'Initial'}
+                      </span>
+                    </td>
+
+                    {/* Attempts */}
+                    <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {gold.attempts != null && gold.attempts !== undefined ? (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            minWidth: '3.6rem',
+                            maxWidth: '5.2rem',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid var(--border)',
+                            padding: '0.2rem 0.45rem',
+                            borderRadius: '6px',
+                            fontWeight: 700,
+                            color: '#fff',
+                            fontVariantNumeric: 'tabular-nums',
+                            fontSize: '0.85rem',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {gold.attempts.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
+                    </td>
+
+                    {/* Clip */}
+                    <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {gold.clip ? (
+                        <a
+                          href={gold.clip}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="clip-icon-link"
+                          title="Watch Video"
+                        >
+                          <Youtube size={19} />
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    {isAdmin && (
+                      <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <button
+                            onClick={() => onEdit(gold)}
+                            className="action-btn"
+                            style={{ color: '#84cc16' }}
+                            title="Edit"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => onDelete(gold.id!)}
+                            className="action-btn"
+                            style={{ color: '#ef4444' }}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              }
+
+              // Group Row
+              const isExpanded = Boolean(expandedGroups[item.groupName]);
+              const groupLevels = item.golds;
+              const completedCount = groupLevels.filter((g) => g.completed !== false).length;
+              const isAllCompleted = completedCount === groupLevels.length;
+              const totalAttempts = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
+              const hasAnyAttempts = groupLevels.some((g) => g.attempts != null && g.attempts > 0);
+
+              // Collective date: latest date or 'Initial'
+              const nonInitialDates = groupLevels
+                .map((g) => g.date)
+                .filter((d) => d && d.toLowerCase() !== 'initial');
+              const displayDate = nonInitialDates.length > 0
+                ? nonInitialDates.sort().reverse()[0]
+                : groupLevels[0]?.date || 'Initial';
+
+              return (
+                <React.Fragment key={`group-${item.groupName}`}>
+                  <tr
+                    onClick={() => toggleGroup(item.groupName)}
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      background: isExpanded ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = isExpanded
+                        ? 'rgba(245, 158, 11, 0.12)'
+                        : 'rgba(255, 255, 255, 0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = isExpanded
+                        ? 'rgba(245, 158, 11, 0.08)'
+                        : 'rgba(255, 255, 255, 0.02)';
+                    }}
+                  >
+                    {/* Group Name Header */}
+                    <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <button
+                          type="button"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--accent)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </button>
+                        <Layers size={18} color="var(--accent)" />
+                        <span style={{ color: '#fff', fontWeight: 800, fontSize: '1.08rem', letterSpacing: '0.01em' }}>
+                          {item.groupName}
+                        </span>
+                        <span
+                          style={{
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: 'var(--accent)',
+                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                            padding: '0.1rem 0.5rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {groupLevels.length} {groupLevels.length === 1 ? 'level' : 'levels'}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Completion Status */}
+                    <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          color: isAllCompleted ? '#10b981' : '#f59e0b',
+                          background: isAllCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                          border: `1px solid ${isAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {isAllCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+                        {completedCount}/{groupLevels.length}
+                      </span>
+                    </td>
+
+                    {/* Group Difficulty preview */}
+                    <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        {Array.from(new Set(groupLevels.map((g) => g.difficulty))).slice(0, 3).map((diff) => (
+                          <span key={diff}>{renderDifficultyBadge(diff)}</span>
+                        ))}
+                      </div>
+                    </td>
+
+                    {/* Latest Date */}
+                    <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
+                      <span className={`date-badge ${displayDate.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                        <Calendar size={13} />
+                        {displayDate}
+                      </span>
+                    </td>
+
+                    {/* Total Attempts */}
+                    <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {hasAnyAttempts ? (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            minWidth: '3.6rem',
+                            maxWidth: '5.6rem',
+                            background: 'rgba(245, 158, 11, 0.08)',
+                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                            padding: '0.2rem 0.45rem',
+                            borderRadius: '6px',
+                            fontWeight: 700,
+                            color: 'var(--accent)',
+                            fontVariantNumeric: 'tabular-nums',
+                            fontSize: '0.85rem',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {totalAttempts.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                      )}
+                    </td>
+
+                    {/* Clip column placeholder */}
+                    <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', opacity: 0.7 }}>
+                        {groupLevels.filter((g) => g.clip).length > 0
+                          ? `${groupLevels.filter((g) => g.clip).length} 🎬`
+                          : '—'}
+                      </span>
+                    </td>
+
+                    {/* Actions column placeholder */}
+                    {isAdmin && (
+                      <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.6 }}>
+                          Group View
+                        </span>
+                      </td>
+                    )}
+                  </tr>
+
+                  {/* Expanded group rows */}
+                  {isExpanded &&
+                    groupLevels.map((gold) => {
+                      const isHidden = Boolean(gold.hidden);
+                      return (
+                        <tr
+                          key={gold.id}
+                          style={{
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                            background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.06)' : 'rgba(0, 0, 0, 0.25)',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = isHidden && isAdmin
+                              ? 'rgba(239, 68, 68, 0.1)'
+                              : 'rgba(255, 255, 255, 0.04)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = isHidden && isAdmin
+                              ? 'rgba(239, 68, 68, 0.06)'
+                              : 'rgba(0, 0, 0, 0.25)';
+                          }}
+                        >
+                          {/* Level Name */}
+                          <td style={{ padding: '0.75rem 1.15rem 0.75rem 3rem', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>↳</span>
+                              <span style={{ color: '#f3f4f6', fontWeight: 600, fontSize: '0.98rem' }}>
+                                {gold.name}
+                              </span>
+                              {isHidden && isAdmin && (
+                                <span
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.2)',
+                                    color: '#ef4444',
+                                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                                    padding: '0.05rem 0.4rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                  }}
+                                >
+                                  <EyeOff size={10} /> Hidden
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {renderStatusBadge(gold.completed)}
+                          </td>
+
+                          {/* Difficulty */}
+                          <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
+                            {renderDifficultyBadge(gold.difficulty)}
+                          </td>
+
+                          {/* Date */}
+                          <td style={{ padding: '0.75rem 1.15rem', whiteSpace: 'nowrap' }}>
+                            <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                              <Calendar size={13} />
+                              {gold.date || 'Initial'}
+                            </span>
+                          </td>
+
+                          {/* Attempts */}
+                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {gold.attempts != null && gold.attempts !== undefined ? (
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  minWidth: '3.6rem',
+                                  maxWidth: '5.2rem',
+                                  background: 'rgba(255, 255, 255, 0.04)',
+                                  border: '1px solid var(--border)',
+                                  padding: '0.15rem 0.4rem',
+                                  borderRadius: '6px',
+                                  fontWeight: 700,
+                                  color: '#fff',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  fontSize: '0.82rem',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {gold.attempts.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* Clip */}
+                          <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {gold.clip ? (
+                              <a
+                                href={gold.clip}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="clip-icon-link"
+                                title="Watch Video"
+                              >
+                                <Youtube size={18} />
+                              </a>
+                            ) : (
+                              <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          {isAdmin && (
+                            <td style={{ padding: '0.75rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(gold);
+                                  }}
+                                  className="action-btn"
+                                  style={{ color: '#84cc16' }}
+                                  title="Edit"
+                                >
+                                  <Edit3 size={15} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(gold.id!);
+                                  }}
+                                  className="action-btn"
+                                  style={{ color: '#ef4444' }}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                </React.Fragment>
               );
             })}
           </tbody>

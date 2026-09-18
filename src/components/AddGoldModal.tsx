@@ -5,11 +5,14 @@ import { Plus, X } from 'lucide-react';
 interface AddGoldModalProps {
   onAdd: (gold: Omit<Gold, 'id'>) => void;
   onCancel: () => void;
+  existingGroups?: string[];
 }
 
-export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
+export function AddGoldModal({ onAdd, onCancel, existingGroups = [] }: AddGoldModalProps) {
   const [formData, setFormData] = useState({
     name: '',
+    group_name: '',
+    completed: true,
     baseDifficulty: 'Beginner',
     gmModifier: '',
     date: new Date().toISOString().split('T')[0],
@@ -49,6 +52,8 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
 
       onAdd({
         name: formData.name.trim(),
+        group_name: formData.group_name.trim() || null,
+        completed: formData.completed,
         difficulty: finalDifficulty,
         date: formData.date.trim(),
         attempts: attemptsNum,
@@ -90,6 +95,26 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
               {errors.name && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.name}</p>}
             </div>
 
+            {/* Group Name */}
+            <div className="form-group">
+              <label className="form-label">Group Name (Optional)</label>
+              <input
+                type="text"
+                list="existing-groups-list"
+                value={formData.group_name}
+                onChange={(e) => setFormData({ ...formData, group_name: e.target.value })}
+                className="form-input"
+                placeholder="e.g. Farewell, Strawberry Jam, SJ Intermediate"
+              />
+              <datalist id="existing-groups-list">
+                {existingGroups.map((grp) => (
+                  <option key={grp} value={grp} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+
+          <div className="form-row">
             {/* Difficulty */}
             <div className="form-group">
               <label className="form-label">Difficulty</label>
@@ -104,6 +129,19 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
                 <option value="Expert">Expert</option>
                 <option value="GM">GM (Grandmaster)</option>
               </select>
+            </div>
+
+            {/* Date */}
+            <div className="form-group">
+              <label className="form-label">Date *</label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="form-input"
+                required
+              />
+              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
             </div>
           </div>
 
@@ -138,19 +176,6 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
           )}
 
           <div className="form-row">
-            {/* Date */}
-            <div className="form-group">
-              <label className="form-label">Date *</label>
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="form-input"
-                required
-              />
-              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
-            </div>
-
             {/* Attempts */}
             <div className="form-group">
               <label className="form-label">Attempts (Optional / Blank)</label>
@@ -161,37 +186,52 @@ export function AddGoldModal({ onAdd, onCancel }: AddGoldModalProps) {
                 value={formData.attempts}
                 onChange={(e) => setFormData({ ...formData, attempts: e.target.value })}
                 className="form-input"
-                style={{ maxWidth: '140px' }}
                 placeholder="e.g. 1250"
               />
               {errors.attempts && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.attempts}</p>}
             </div>
-          </div>
 
-          {/* Clip */}
-          <div className="form-group">
-            <label className="form-label">YouTube Clip / Video URL (Optional)</label>
-            <input
-              type="url"
-              value={formData.clip}
-              onChange={(e) => setFormData({ ...formData, clip: e.target.value })}
-              className="form-input"
-              placeholder="https://youtu.be/..."
-            />
-          </div>
-
-          {/* Hidden */}
-          <div className="form-group">
-            <label className="form-checkbox">
+            {/* Clip */}
+            <div className="form-group">
+              <label className="form-label">YouTube Clip / Video URL (Optional)</label>
               <input
-                type="checkbox"
-                checked={formData.hidden}
-                onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+                type="url"
+                value={formData.clip}
+                onChange={(e) => setFormData({ ...formData, clip: e.target.value })}
+                className="form-input"
+                placeholder="https://youtu.be/..."
               />
-              <span style={{ color: formData.hidden ? 'var(--red)' : 'var(--text-primary)', fontWeight: 600 }}>
-                Hidden (only visible to admin)
-              </span>
-            </label>
+            </div>
+          </div>
+
+          <div className="form-row" style={{ marginTop: '0.5rem' }}>
+            {/* Completed */}
+            <div className="form-group">
+              <label className="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={formData.completed}
+                  onChange={(e) => setFormData({ ...formData, completed: e.target.checked })}
+                />
+                <span style={{ color: formData.completed ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 600 }}>
+                  Completed ({formData.completed ? 'Yes' : 'In Progress'})
+                </span>
+              </label>
+            </div>
+
+            {/* Hidden */}
+            <div className="form-group">
+              <label className="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={formData.hidden}
+                  onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+                />
+                <span style={{ color: formData.hidden ? 'var(--red)' : 'var(--text-primary)', fontWeight: 600 }}>
+                  Hidden (only visible to admin)
+                </span>
+              </label>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>

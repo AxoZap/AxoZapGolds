@@ -15,6 +15,8 @@ export interface Gold {
   attempts?: number | null;
   clip?: string | null;
   hidden?: boolean;
+  group_name?: string | null;
+  completed?: boolean;
   created_at?: string;
 }
 
@@ -31,14 +33,13 @@ export default function App() {
 
   const [filters, setFilters] = useState<FilterState>({
     difficulty: 'All',
-    side: 'All',
+    groupFilter: 'All',
     hasClip: false,
     searchQuery: '',
   });
 
-  const [sortBy, setSortBy] = useState<'order' | 'name' | 'date' | 'difficulty' | 'attempts'>('order');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [showFilteredRanks, setShowFilteredRanks] = useState(false);
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'difficulty' | 'attempts'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     loadGolds();
@@ -152,13 +153,11 @@ export default function App() {
           }
         }
 
-        // Side filter (A, B, C)
-        if (filters.side !== 'All') {
-          const nameLower = gold.name.toLowerCase();
-          const targetSide = filters.side.toLowerCase();
-          if (!nameLower.endsWith(targetSide)) {
-            return false;
-          }
+        // Group filter (All, In a Group, Not in a Group)
+        if (filters.groupFilter === 'Grouped') {
+          if (!gold.group_name || !gold.group_name.trim()) return false;
+        } else if (filters.groupFilter === 'Ungrouped') {
+          if (gold.group_name && gold.group_name.trim()) return false;
         }
 
         // Clip filter
@@ -170,9 +169,10 @@ export default function App() {
         if (filters.searchQuery.trim()) {
           const q = filters.searchQuery.toLowerCase().trim();
           const matchesName = gold.name.toLowerCase().includes(q);
+          const matchesGroup = (gold.group_name || '').toLowerCase().includes(q);
           const matchesDate = gold.date.toLowerCase().includes(q);
           const matchesDiff = gold.difficulty.toLowerCase().includes(q);
-          if (!matchesName && !matchesDate && !matchesDiff) {
+          if (!matchesName && !matchesGroup && !matchesDate && !matchesDiff) {
             return false;
           }
         }
@@ -181,13 +181,11 @@ export default function App() {
       })
       .sort((a, b) => {
         let diff = 0;
-        if (sortBy === 'order') {
-          diff = (a.placement || 0) - (b.placement || 0);
-        } else if (sortBy === 'name') {
+        if (sortBy === 'name') {
           diff = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
         } else if (sortBy === 'date') {
-          if (a.date.toLowerCase() === 'initial') return -1;
-          if (b.date.toLowerCase() === 'initial') return 1;
+          if (a.date.toLowerCase() === 'initial' && b.date.toLowerCase() !== 'initial') return -1;
+          if (b.date.toLowerCase() === 'initial' && a.date.toLowerCase() !== 'initial') return 1;
           diff = a.date.localeCompare(b.date);
         } else if (sortBy === 'attempts') {
           diff = (a.attempts || 0) - (b.attempts || 0);
@@ -239,11 +237,20 @@ export default function App() {
 
       {/* Modals */}
       {showAddModal && (
-        <AddGoldModal onAdd={handleAddGold} onCancel={() => setShowAddModal(false)} />
+        <AddGoldModal
+          onAdd={handleAddGold}
+          onCancel={() => setShowAddModal(false)}
+          existingGroups={Array.from(new Set(golds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]))}
+        />
       )}
 
       {editingGold && (
-        <EditGoldModal gold={editingGold} onSave={handleSaveEdit} onCancel={() => setEditingGold(null)} />
+        <EditGoldModal
+          gold={editingGold}
+          onSave={handleSaveEdit}
+          onCancel={() => setEditingGold(null)}
+          existingGroups={Array.from(new Set(golds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]))}
+        />
       )}
 
       {/* Filters and Sorting */}
@@ -274,8 +281,6 @@ export default function App() {
           onDelete={handleDeleteGold}
           onEdit={(gold) => setEditingGold(gold)}
           isAdmin={isAdmin}
-          showFilteredRanks={showFilteredRanks}
-          onToggleRanks={() => setShowFilteredRanks((prev) => !prev)}
         />
       )}
     </div>
