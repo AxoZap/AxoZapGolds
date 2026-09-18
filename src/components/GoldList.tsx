@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Gold, LevelGroup } from '../App';
+import { FilterState } from './GoldFilters';
 import {
   Calendar,
   Youtube,
@@ -21,6 +22,7 @@ interface GoldListProps {
   golds: Gold[];
   allGolds: Gold[];
   groups: LevelGroup[];
+  filters?: FilterState;
   groupFilter?: 'All' | 'Groups' | 'Single';
   statusFilter?: 'All' | 'Uncompleted' | 'Completed' | 'Completed Groups';
   onDelete: (id: string | number) => void;
@@ -41,6 +43,7 @@ export function GoldList({
   golds,
   allGolds,
   groups,
+  filters,
   groupFilter = 'All',
   statusFilter = 'All',
   onDelete,
@@ -232,18 +235,30 @@ export function GoldList({
   }
 
   // Also show defined groups from level_groups that currently have 0 matching levels
-  // Don't show empty groups if filtering Single only, or if filtering by Completed / Completed Groups
-  const isCompletedFilter = statusFilter === 'Completed' || statusFilter === 'Completed Groups';
-  if (groupFilter !== 'Single' && !isCompletedFilter) {
+  // A group with 0 matching levels should hide if:
+  // - Filtering by Single only (groupFilter === 'Single')
+  // - Level-specific filters are active (hasClip, difficulties, statusFilter !== 'All')
+  // - Or search query is active and doesn't match the group's name
+  const effectiveStatusFilter = filters?.statusFilter || statusFilter;
+  const effectiveGroupFilter = filters?.groupFilter || groupFilter;
+  const hasLevelSpecificFilter =
+    Boolean(filters?.hasClip) ||
+    (filters?.difficulties?.length ?? 0) > 0 ||
+    effectiveStatusFilter !== 'All';
+
+  if (effectiveGroupFilter !== 'Single' && !hasLevelSpecificFilter) {
+    const search = (filters?.searchQuery || '').trim().toLowerCase();
     for (const grp of groups) {
       const lowerGrp = grp.name.trim().toLowerCase();
       if (!processedGroups.has(lowerGrp)) {
-        displayItems.push({
-          type: 'group',
-          groupName: grp.name,
-          golds: [],
-          metadata: grp,
-        });
+        if (!search || lowerGrp.includes(search)) {
+          displayItems.push({
+            type: 'group',
+            groupName: grp.name,
+            golds: [],
+            metadata: grp,
+          });
+        }
       }
     }
   }
@@ -593,7 +608,21 @@ export function GoldList({
                 ? allGroupMembers.filter((g) => g.completed !== false).length
                 : groupLevels.filter((g) => g.completed !== false).length;
 
-              const isAllCompleted = totalGroupLevelsCount > 0 && totalCompletedCount === totalGroupLevelsCount;
+              // When statusFilter is active ('Completed', 'Completed Groups', 'Uncompleted'):
+              // User requested: "The status should stay the same, not go to 1/1"
+              // When sorting/filtering by anything but status (e.g. difficulty, clip, search, or no filter):
+              // User requested: "When sorting by anything but status, like difficutly, the 'Status' like 1/8 can change"
+              const isFilteringByStatus = effectiveStatusFilter !== 'All';
+
+              const displayCompletedCount = isFilteringByStatus
+                ? totalCompletedCount
+                : groupLevels.filter((g) => g.completed !== false).length;
+
+              const displayTotalCount = isFilteringByStatus
+                ? totalGroupLevelsCount
+                : groupLevels.length;
+
+              const isGroupCompleted = displayTotalCount > 0 && displayCompletedCount === displayTotalCount;
 
               // Total attempts: group.attempts override if provided, otherwise sum of member levels
               const memberAttemptsSum = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
@@ -697,7 +726,7 @@ export function GoldList({
                                 fontWeight: 700,
                               }}
                             >
-                              {totalGroupLevelsCount} {totalGroupLevelsCount === 1 ? 'level' : 'levels'}
+                              {displayTotalCount} {displayTotalCount === 1 ? 'level' : 'levels'}
                             </span>
                           </div>
                           {meta?.description && (
@@ -711,23 +740,23 @@ export function GoldList({
 
                     {/* Completion Status */}
                     <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {totalGroupLevelsCount > 0 ? (
+                      {displayTotalCount > 0 ? (
                         <span
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '0.3rem',
-                            color: isAllCompleted ? '#10b981' : '#f59e0b',
-                            background: isAllCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                            border: `1px solid ${isAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                            color: isGroupCompleted ? '#10b981' : '#f59e0b',
+                            background: isGroupCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                            border: `1px solid ${isGroupCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                             padding: '0.15rem 0.55rem',
                             borderRadius: '9999px',
                             fontSize: '0.75rem',
                             fontWeight: 700,
                           }}
                         >
-                          {isAllCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
-                          {totalCompletedCount}/{totalGroupLevelsCount}
+                          {isGroupCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+                          {displayCompletedCount}/{displayTotalCount}
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.8rem' }}>

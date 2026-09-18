@@ -493,18 +493,19 @@ export default function App() {
         const activeGroupNames = new Set(
           filteredGolds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]
         );
-        if (filters.groupFilter !== 'Single') {
+        const hasLevelSpecificFilter =
+          Boolean(filters.hasClip) ||
+          (filters.difficulties?.length ?? 0) > 0 ||
+          filters.statusFilter !== 'All';
+
+        if (filters.groupFilter !== 'Single' && !hasLevelSpecificFilter) {
+          const search = filters.searchQuery.trim().toLowerCase();
           for (const grp of groups) {
-            if (
-              !filters.searchQuery ||
-              grp.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
-            ) {
-              // Respect statusFilter for empty groups
-              if (filters.statusFilter === 'Completed' || filters.statusFilter === 'Completed Groups') {
-                // Empty groups are not completed
-                continue;
+            const lowerGrp = grp.name.trim().toLowerCase();
+            if (!activeGroupNames.has(grp.name.trim())) {
+              if (!search || lowerGrp.includes(search)) {
+                activeGroupNames.add(grp.name.trim());
               }
-              activeGroupNames.add(grp.name.trim());
             }
           }
         }
@@ -531,6 +532,7 @@ export default function App() {
           golds={filteredGolds}
           allGolds={golds}
           groups={groups}
+          filters={filters}
           groupFilter={filters.groupFilter}
           statusFilter={filters.statusFilter}
           onDelete={handleDeleteGold}
