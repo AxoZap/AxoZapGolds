@@ -532,6 +532,7 @@ export default function App() {
           allGolds={golds}
           groups={groups}
           groupFilter={filters.groupFilter}
+          statusFilter={filters.statusFilter}
           onDelete={handleDeleteGold}
           onEdit={(gold) => setEditingGold(gold)}
           onEditGroup={(group) => setEditingGroup(group)}

@@ -22,6 +22,7 @@ interface GoldListProps {
   allGolds: Gold[];
   groups: LevelGroup[];
   groupFilter?: 'All' | 'Groups' | 'Single';
+  statusFilter?: 'All' | 'Uncompleted' | 'Completed' | 'Completed Groups';
   onDelete: (id: string | number) => void;
   onEdit: (gold: Gold) => void;
   onEditGroup: (group: LevelGroup) => void;
@@ -41,6 +42,7 @@ export function GoldList({
   allGolds,
   groups,
   groupFilter = 'All',
+  statusFilter = 'All',
   onDelete,
   onEdit,
   onEditGroup,
@@ -57,7 +59,7 @@ export function GoldList({
   const [dragOverInnerIndex, setDragOverInnerIndex] = useState<number | null>(null);
   const [activeGroupDrag, setActiveGroupDrag] = useState<string | null>(null);
 
-  const canDrag = Boolean(isAdmin || isCustomOrder);
+  const canDrag = Boolean(isAdmin && isCustomOrder);
 
   // Top-level drag drop handlers
   const handleTopDragStart = (e: React.DragEvent, index: number) => {
@@ -229,8 +231,10 @@ export function GoldList({
     }
   }
 
-  // Also show defined groups from level_groups that currently have 0 matching levels (if not filtering Single only)
-  if (groupFilter !== 'Single') {
+  // Also show defined groups from level_groups that currently have 0 matching levels
+  // Don't show empty groups if filtering Single only, or if filtering by Completed / Completed Groups
+  const isCompletedFilter = statusFilter === 'Completed' || statusFilter === 'Completed Groups';
+  if (groupFilter !== 'Single' && !isCompletedFilter) {
     for (const grp of groups) {
       const lowerGrp = grp.name.trim().toLowerCase();
       if (!processedGroups.has(lowerGrp)) {
@@ -579,8 +583,17 @@ export function GoldList({
               const groupLevels = item.golds;
               const meta = item.metadata;
 
-              const completedCount = groupLevels.filter((g) => g.completed !== false).length;
-              const isAllCompleted = groupLevels.length > 0 && completedCount === groupLevels.length;
+              // Find all actual members in the entire database for this group
+              const allGroupMembers = allGolds.filter(
+                (g) => (g.group_name || '').trim().toLowerCase() === item.groupName.trim().toLowerCase()
+              );
+              // Total levels in this group from database (or matching filtered levels if allGolds not available)
+              const totalGroupLevelsCount = allGroupMembers.length > 0 ? allGroupMembers.length : groupLevels.length;
+              const totalCompletedCount = allGroupMembers.length > 0
+                ? allGroupMembers.filter((g) => g.completed !== false).length
+                : groupLevels.filter((g) => g.completed !== false).length;
+
+              const isAllCompleted = totalGroupLevelsCount > 0 && totalCompletedCount === totalGroupLevelsCount;
 
               // Total attempts: group.attempts override if provided, otherwise sum of member levels
               const memberAttemptsSum = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
@@ -684,7 +697,7 @@ export function GoldList({
                                 fontWeight: 700,
                               }}
                             >
-                              {groupLevels.length} {groupLevels.length === 1 ? 'level' : 'levels'}
+                              {totalGroupLevelsCount} {totalGroupLevelsCount === 1 ? 'level' : 'levels'}
                             </span>
                           </div>
                           {meta?.description && (
@@ -698,7 +711,7 @@ export function GoldList({
 
                     {/* Completion Status */}
                     <td style={{ padding: '0.95rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {groupLevels.length > 0 ? (
+                      {totalGroupLevelsCount > 0 ? (
                         <span
                           style={{
                             display: 'inline-flex',
@@ -714,7 +727,7 @@ export function GoldList({
                           }}
                         >
                           {isAllCompleted ? <CheckCircle2 size={13} /> : <Circle size={13} />}
-                          {completedCount}/{groupLevels.length}
+                          {totalCompletedCount}/{totalGroupLevelsCount}
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.8rem' }}>

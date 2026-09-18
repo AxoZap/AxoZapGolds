@@ -260,7 +260,7 @@ export function GoldFilters({
             onChange={(e) => onSortChange(e.target.value as any)}
             className="form-select"
           >
-            <option value="custom">Custom Order (Draggable)</option>
+            <option value="custom">Default</option>
             <option value="name">Name</option>
             <option value="difficulty">Difficulty</option>
             <option value="attempts">Attempts</option>
