@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "axozap-golds-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-10",
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true,
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "CF_ACCESS_TEAM_DOMAIN": "https://axozapteam.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "e6accb9e432b7f835b7ac40106441f63eb0ec18f084a2e914802b52768b93ceb"
+  },
+  "d1_databases": [
+    {
+      "binding": "axozap_golds_db",
+      "database_name": "axozap-golds-db",
+      "database_id": "307dcc03-eadd-4651-b634-7b52f386a2ab"
+    }
+  ]
+}
