@@ -23,8 +23,7 @@ export function EditGoldModal({ gold, onSave, onCancel, existingGroups = [] }: E
     }
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const initialDate = gold.date && gold.date !== 'Initial' ? gold.date : todayStr;
+  const initialDate = gold.date && gold.date !== 'Initial' ? gold.date : '';
 
   const [formData, setFormData] = useState({
     name: gold.name,
@@ -44,9 +43,6 @@ export function EditGoldModal({ gold, onSave, onCancel, existingGroups = [] }: E
     const errs: Record<string, string> = {};
     if (!formData.name.trim()) {
       errs.name = 'Name is required';
-    }
-    if (!formData.date.trim()) {
-      errs.date = 'Date is required';
     }
     if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
       errs.attempts = 'Attempts must be a non-negative number';
@@ -149,15 +145,13 @@ export function EditGoldModal({ gold, onSave, onCancel, existingGroups = [] }: E
 
             {/* Date */}
             <div className="form-group">
-              <label className="form-label">Date *</label>
+              <label className="form-label">Date (Optional)</label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 className="form-input"
-                required
               />
-              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
             </div>
           </div>
 

@@ -10,8 +10,8 @@ export interface FilterState {
 interface GoldFiltersProps {
   filters: FilterState;
   onFiltersChange: (filters: FilterState) => void;
-  sortBy: 'name' | 'date' | 'difficulty' | 'attempts';
-  onSortChange: (sortBy: 'name' | 'date' | 'difficulty' | 'attempts') => void;
+  sortBy: 'custom' | 'name' | 'date' | 'difficulty' | 'attempts';
+  onSortChange: (sortBy: 'custom' | 'name' | 'date' | 'difficulty' | 'attempts') => void;
   sortOrder: 'asc' | 'desc';
   onSortOrderChange: (order: 'asc' | 'desc') => void;
 }
@@ -75,10 +75,11 @@ export function GoldFilters({
             onChange={(e) => onSortChange(e.target.value as any)}
             className="form-select"
           >
-            <option value="date">Date</option>
+            <option value="custom">Custom Order (Draggable)</option>
             <option value="name">Name</option>
             <option value="difficulty">Difficulty</option>
             <option value="attempts">Attempts</option>
+            <option value="date">Date</option>
           </select>
         </div>
 

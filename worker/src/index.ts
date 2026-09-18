@@ -24,6 +24,7 @@ export type Gold = {
 
 export type LevelGroup = {
   id?: number | string;
+  placement?: number;
   name: string;
   description?: string | null;
   date?: string | null;
@@ -150,6 +151,7 @@ function formatGold(row: any): Gold {
 function formatGroup(row: any): LevelGroup {
   return {
     id: row.id,
+    placement: row.placement != null ? Number(row.placement) : Number(row.id),
     name: row.name,
     description: row.description || null,
     date: row.date || null,
@@ -168,9 +170,9 @@ async function handleGetGolds(c: any) {
   const admin = await isAuthorized(c);
   const db = c.env.axozap_golds_db;
 
-  let query = "SELECT * FROM golds ORDER BY id ASC";
+  let query = "SELECT * FROM golds ORDER BY placement ASC, id ASC";
   if (!admin) {
-    query = "SELECT * FROM golds WHERE hidden = 0 ORDER BY id ASC";
+    query = "SELECT * FROM golds WHERE hidden = 0 ORDER BY placement ASC, id ASC";
   }
 
   const { results } = await db.prepare(query).all();
@@ -298,16 +300,50 @@ async function handleDeleteGold(c: any) {
 app.delete("/golds/:id", handleDeleteGold);
 app.delete("/api/golds/:id", handleDeleteGold);
 
-// ================= LEVEL GROUPS API =================
-
 // GET /groups
 async function handleGetGroups(c: any) {
   const db = c.env.axozap_golds_db;
-  const { results } = await db.prepare("SELECT * FROM level_groups ORDER BY name ASC").all();
+  const { results } = await db.prepare("SELECT * FROM level_groups ORDER BY placement ASC, id ASC").all();
   return c.json((results || []).map(formatGroup));
 }
 app.get("/groups", handleGetGroups);
 app.get("/api/groups", handleGetGroups);
+
+// POST /reorder (Admin only) - update placements for golds and/or groups in batch
+async function handleReorder(c: any) {
+  if (!(await isAuthorized(c))) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const body = await c.req.json();
+  const db = c.env.axozap_golds_db;
+
+  // { goldOrders: [{ id: 1, placement: 1 }, ...], groupOrders: [{ id: 2, placement: 1 }, ...] }
+  const goldOrders: Array<{ id: number | string; placement: number }> = body.goldOrders || [];
+  const groupOrders: Array<{ id: number | string; placement: number }> = body.groupOrders || [];
+
+  const statements: any[] = [];
+
+  for (const item of goldOrders) {
+    statements.push(
+      db.prepare("UPDATE golds SET placement = ? WHERE id = ?").bind(Number(item.placement), Number(item.id))
+    );
+  }
+
+  for (const item of groupOrders) {
+    statements.push(
+      db.prepare("UPDATE level_groups SET placement = ? WHERE id = ?").bind(Number(item.placement), Number(item.id))
+    );
+  }
+
+  if (statements.length > 0) {
+    await db.batch(statements);
+  }
+
+  return c.json({ success: true });
+}
+app.post("/reorder", handleReorder);
+app.post("/api/reorder", handleReorder);
 
 // POST /groups (Admin only)
 async function handlePostGroup(c: any) {

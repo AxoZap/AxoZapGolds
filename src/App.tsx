@@ -24,6 +24,7 @@ export interface Gold {
 
 export interface LevelGroup {
   id?: number | string;
+  placement?: number;
   name: string;
   description?: string | null;
   date?: string | null;
@@ -57,8 +58,8 @@ export default function App() {
     searchQuery: '',
   });
 
-  const [sortBy, setSortBy] = useState<'name' | 'date' | 'difficulty' | 'attempts'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<'custom' | 'name' | 'date' | 'difficulty' | 'attempts'>('custom');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     loadData();
@@ -95,6 +96,31 @@ export default function App() {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Reordering persist handler
+  const handleReorder = async (
+    newGolds: Gold[],
+    newGroups: LevelGroup[]
+  ) => {
+    // Update local state immediately for responsive drag feedback
+    setGolds(newGolds);
+    setGroups(newGroups);
+
+    if (!isAdmin) return;
+
+    try {
+      const goldOrders = newGolds.map((g, idx) => ({ id: g.id!, placement: idx + 1 }));
+      const groupOrders = newGroups.map((grp, idx) => ({ id: grp.id!, placement: idx + 1 }));
+
+      await fetch(`${API_URL}/reorder`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ goldOrders, groupOrders }),
+      });
+    } catch (err) {
+      console.error('Failed to persist reorder to server:', err);
     }
   };
 
@@ -264,71 +290,77 @@ export default function App() {
 
   // Filter and Sort Logic
   const filteredGolds = useMemo(() => {
-    return golds
-      .filter((gold) => {
-        // Difficulty filter
-        if (filters.difficulty !== 'All') {
-          if (filters.difficulty === 'GM (All)') {
-            if (!gold.difficulty.toUpperCase().startsWith('GM')) return false;
-          } else if (gold.difficulty.toLowerCase() !== filters.difficulty.toLowerCase()) {
-            return false;
-          }
-        }
-
-        // Group filter (All, In a Group, Not in a Group)
-        if (filters.groupFilter === 'Grouped') {
-          if (!gold.group_name || !gold.group_name.trim()) return false;
-        } else if (filters.groupFilter === 'Ungrouped') {
-          if (gold.group_name && gold.group_name.trim()) return false;
-        }
-
-        // Clip filter
-        if (filters.hasClip && !gold.clip) {
+    const list = golds.filter((gold) => {
+      // Difficulty filter
+      if (filters.difficulty !== 'All') {
+        if (filters.difficulty === 'GM (All)') {
+          if (!gold.difficulty.toUpperCase().startsWith('GM')) return false;
+        } else if (gold.difficulty.toLowerCase() !== filters.difficulty.toLowerCase()) {
           return false;
         }
+      }
 
-        // Search query
-        if (filters.searchQuery.trim()) {
-          const q = filters.searchQuery.toLowerCase().trim();
-          const matchesName = gold.name.toLowerCase().includes(q);
-          const matchesGroup = (gold.group_name || '').toLowerCase().includes(q);
-          const matchesDate = gold.date.toLowerCase().includes(q);
-          const matchesDiff = gold.difficulty.toLowerCase().includes(q);
-          if (!matchesName && !matchesGroup && !matchesDate && !matchesDiff) {
-            return false;
+      // Group filter (All, In a Group, Not in a Group)
+      if (filters.groupFilter === 'Grouped') {
+        if (!gold.group_name || !gold.group_name.trim()) return false;
+      } else if (filters.groupFilter === 'Ungrouped') {
+        if (gold.group_name && gold.group_name.trim()) return false;
+      }
+
+      // Clip filter
+      if (filters.hasClip && !gold.clip) {
+        return false;
+      }
+
+      // Search query
+      if (filters.searchQuery.trim()) {
+        const q = filters.searchQuery.toLowerCase().trim();
+        const matchesName = gold.name.toLowerCase().includes(q);
+        const matchesGroup = (gold.group_name || '').toLowerCase().includes(q);
+        const matchesDate = gold.date.toLowerCase().includes(q);
+        const matchesDiff = gold.difficulty.toLowerCase().includes(q);
+        if (!matchesName && !matchesGroup && !matchesDate && !matchesDiff) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (sortBy === 'custom') {
+      return sortOrder === 'asc' ? list : [...list].reverse();
+    }
+
+    return [...list].sort((a, b) => {
+      let diff = 0;
+      if (sortBy === 'name') {
+        diff = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      } else if (sortBy === 'date') {
+        if (!a.date && b.date) return 1;
+        if (a.date && !b.date) return -1;
+        if (a.date.toLowerCase() === 'initial' && b.date.toLowerCase() !== 'initial') return -1;
+        if (b.date.toLowerCase() === 'initial' && a.date.toLowerCase() !== 'initial') return 1;
+        diff = a.date.localeCompare(b.date);
+      } else if (sortBy === 'attempts') {
+        diff = (a.attempts || 0) - (b.attempts || 0);
+      } else if (sortBy === 'difficulty') {
+        const getDiffScore = (raw: string) => {
+          const s = (raw || '').trim().toLowerCase();
+          if (s.startsWith('beg')) return 10;
+          if (s.startsWith('int')) return 20;
+          if (s.startsWith('adv')) return 30;
+          if (s.startsWith('exp')) return 40;
+          if (s.startsWith('gm')) {
+            const num = parseInt(s.replace(/[^0-9]/g, ''), 10);
+            return 50 + (isNaN(num) ? 0 : num);
           }
-        }
+          return 0;
+        };
+        diff = getDiffScore(a.difficulty) - getDiffScore(b.difficulty);
+      }
 
-        return true;
-      })
-      .sort((a, b) => {
-        let diff = 0;
-        if (sortBy === 'name') {
-          diff = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-        } else if (sortBy === 'date') {
-          if (a.date.toLowerCase() === 'initial' && b.date.toLowerCase() !== 'initial') return -1;
-          if (b.date.toLowerCase() === 'initial' && a.date.toLowerCase() !== 'initial') return 1;
-          diff = a.date.localeCompare(b.date);
-        } else if (sortBy === 'attempts') {
-          diff = (a.attempts || 0) - (b.attempts || 0);
-        } else if (sortBy === 'difficulty') {
-          const getDiffScore = (raw: string) => {
-            const s = (raw || '').trim().toLowerCase();
-            if (s.startsWith('beg')) return 10;
-            if (s.startsWith('int')) return 20;
-            if (s.startsWith('adv')) return 30;
-            if (s.startsWith('exp')) return 40;
-            if (s.startsWith('gm')) {
-              const num = parseInt(s.replace(/[^0-9]/g, ''), 10);
-              return 50 + (isNaN(num) ? 0 : num);
-            }
-            return 0;
-          };
-          diff = getDiffScore(a.difficulty) - getDiffScore(b.difficulty);
-        }
-
-        return sortOrder === 'asc' ? diff : -diff;
-      });
+      return sortOrder === 'asc' ? diff : -diff;
+    });
   }, [golds, filters, sortBy, sortOrder]);
 
   const existingGroupNames = useMemo(() => {
@@ -425,9 +457,32 @@ export default function App() {
       />
 
       {/* Counter */}
-      <div style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.9rem' }}>
-        Showing {filteredGolds.length} golden strawberr{filteredGolds.length === 1 ? 'y' : 'ies'}
-      </div>
+      {(() => {
+        // Collect unique group names appearing in the filtered list
+        const activeGroupNames = new Set(
+          filteredGolds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]
+        );
+        if (filters.groupFilter !== 'Ungrouped') {
+          for (const grp of groups) {
+            if (
+              !filters.searchQuery ||
+              grp.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
+            ) {
+              activeGroupNames.add(grp.name.trim());
+            }
+          }
+        }
+
+        const groupCount = activeGroupNames.size;
+        const standaloneCount = filteredGolds.filter((g) => !g.group_name || !g.group_name.trim()).length;
+        const totalStrawberries = filteredGolds.length;
+
+        return (
+          <div style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.9rem' }}>
+            Showing {groupCount} group{groupCount === 1 ? '' : 's'} and {standaloneCount} golden{standaloneCount === 1 ? '' : 's'} totaling {totalStrawberries} strawberr{totalStrawberries === 1 ? 'y' : 'ies'}
+          </div>
+        );
+      })()}
 
       {/* Main Table */}
       {loading ? (
@@ -445,6 +500,8 @@ export default function App() {
           onEditGroup={(group) => setEditingGroup(group)}
           onDeleteGroup={handleDeleteGroup}
           onAddLevelToGroup={handleAddLevelToGroup}
+          onReorder={handleReorder}
+          isCustomOrder={sortBy === 'custom'}
           isAdmin={isAdmin}
         />
       )}

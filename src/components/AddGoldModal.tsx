@@ -16,7 +16,7 @@ export function AddGoldModal({ onAdd, onCancel, existingGroups = [], defaultGrou
     completed: true,
     baseDifficulty: 'Beginner',
     gmModifier: '',
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     attempts: '',
     clip: '',
     hidden: false,
@@ -28,9 +28,6 @@ export function AddGoldModal({ onAdd, onCancel, existingGroups = [], defaultGrou
     const errs: Record<string, string> = {};
     if (!formData.name.trim()) {
       errs.name = 'Name is required (e.g. 7c, 6b)';
-    }
-    if (!formData.date.trim()) {
-      errs.date = 'Date is required';
     }
     if (formData.attempts && (isNaN(Number(formData.attempts)) || Number(formData.attempts) < 0)) {
       errs.attempts = 'Attempts must be a non-negative number';
@@ -134,15 +131,13 @@ export function AddGoldModal({ onAdd, onCancel, existingGroups = [], defaultGrou
 
             {/* Date */}
             <div className="form-group">
-              <label className="form-label">Date *</label>
+              <label className="form-label">Date (Optional)</label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 className="form-input"
-                required
               />
-              {errors.date && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.date}</p>}
             </div>
           </div>
 

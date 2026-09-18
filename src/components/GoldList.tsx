@@ -14,6 +14,7 @@ import {
   Plus,
   ExternalLink,
   Info,
+  GripVertical,
 } from 'lucide-react';
 
 interface GoldListProps {
@@ -25,6 +26,8 @@ interface GoldListProps {
   onEditGroup: (group: LevelGroup) => void;
   onDeleteGroup: (group: LevelGroup) => void;
   onAddLevelToGroup: (groupName: string) => void;
+  onReorder?: (newGolds: Gold[], newGroups: LevelGroup[]) => void;
+  isCustomOrder?: boolean;
   isAdmin: boolean;
 }
 
@@ -34,15 +37,156 @@ type ListItem =
 
 export function GoldList({
   golds,
+  allGolds,
   groups,
   onDelete,
   onEdit,
   onEditGroup,
   onDeleteGroup,
   onAddLevelToGroup,
+  onReorder,
+  isCustomOrder,
   isAdmin,
 }: GoldListProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [draggedTopIndex, setDraggedTopIndex] = useState<number | null>(null);
+  const [dragOverTopIndex, setDragOverTopIndex] = useState<number | null>(null);
+  const [draggedInnerIndex, setDraggedInnerIndex] = useState<number | null>(null);
+  const [dragOverInnerIndex, setDragOverInnerIndex] = useState<number | null>(null);
+  const [activeGroupDrag, setActiveGroupDrag] = useState<string | null>(null);
+
+  const canDrag = Boolean(isAdmin || isCustomOrder);
+
+  // Top-level drag drop handlers
+  const handleTopDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'TOP_LEVEL', fromIndex: index }));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedTopIndex(index);
+  };
+
+  const handleTopDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverTopIndex !== index) {
+      setDragOverTopIndex(index);
+    }
+  };
+
+  const handleTopDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    setDragOverTopIndex(null);
+    setDraggedTopIndex(null);
+
+    const raw = e.dataTransfer.getData('text/plain');
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (data.type !== 'TOP_LEVEL') return;
+      const fromIndex = Number(data.fromIndex);
+      if (fromIndex === toIndex || isNaN(fromIndex)) return;
+
+      const newDisplayItems = [...displayItems];
+      const [movedItem] = newDisplayItems.splice(fromIndex, 1);
+      newDisplayItems.splice(toIndex, 0, movedItem);
+
+      // Reconstruct full golds and groups ordering based on newDisplayItems
+      const reorderedGolds: Gold[] = [];
+      const reorderedGroups: LevelGroup[] = [];
+      const seenGroupNames = new Set<string>();
+
+      for (const item of newDisplayItems) {
+        if (item.type === 'standalone') {
+          reorderedGolds.push(item.gold);
+        } else {
+          for (const g of item.golds) {
+            reorderedGolds.push(g);
+          }
+          if (item.metadata) {
+            reorderedGroups.push(item.metadata);
+            seenGroupNames.add(item.metadata.name.trim().toLowerCase());
+          }
+        }
+      }
+
+      // Preserve any golds or groups that might have been excluded by active filters
+      const currentGoldIds = new Set(reorderedGolds.map((g) => g.id));
+      for (const g of allGolds) {
+        if (!currentGoldIds.has(g.id)) {
+          reorderedGolds.push(g);
+        }
+      }
+
+      for (const grp of groups) {
+        if (!seenGroupNames.has(grp.name.trim().toLowerCase())) {
+          reorderedGroups.push(grp);
+        }
+      }
+
+      if (onReorder) {
+        onReorder(reorderedGolds, reorderedGroups);
+      }
+    } catch (err) {
+      console.error('Error parsing drop data:', err);
+    }
+  };
+
+  // Inner level drag drop handlers within a group
+  const handleInnerDragStart = (e: React.DragEvent, groupName: string, index: number) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'INNER_LEVEL', groupName, fromIndex: index }));
+    e.dataTransfer.effectAllowed = 'move';
+    setActiveGroupDrag(groupName);
+    setDraggedInnerIndex(index);
+  };
+
+  const handleInnerDragOver = (e: React.DragEvent, groupName: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (activeGroupDrag === groupName && dragOverInnerIndex !== index) {
+      setDragOverInnerIndex(index);
+    }
+  };
+
+  const handleInnerDrop = (e: React.DragEvent, groupName: string, toIndex: number, groupGolds: Gold[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveGroupDrag(null);
+    setDraggedInnerIndex(null);
+    setDragOverInnerIndex(null);
+
+    const raw = e.dataTransfer.getData('text/plain');
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (data.type !== 'INNER_LEVEL' || data.groupName !== groupName) return;
+      const fromIndex = Number(data.fromIndex);
+      if (fromIndex === toIndex || isNaN(fromIndex)) return;
+
+      const newGroupGolds = [...groupGolds];
+      const [movedGold] = newGroupGolds.splice(fromIndex, 1);
+      newGroupGolds.splice(toIndex, 0, movedGold);
+
+      // Splice back into full golds array
+      const remainingGolds = allGolds.filter(
+        (g) => (g.group_name || '').trim().toLowerCase() !== groupName.trim().toLowerCase()
+      );
+
+      // Find original insertion position
+      const firstOrigIdx = allGolds.findIndex(
+        (g) => (g.group_name || '').trim().toLowerCase() === groupName.trim().toLowerCase()
+      );
+
+      const targetIdx = firstOrigIdx >= 0 ? firstOrigIdx : remainingGolds.length;
+      const finalGolds = [...remainingGolds];
+      finalGolds.splice(targetIdx, 0, ...newGroupGolds);
+
+      if (onReorder) {
+        onReorder(finalGolds, groups);
+      }
+    } catch (err) {
+      console.error('Error parsing inner drop data:', err);
+    }
+  };
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups((prev) => ({
@@ -154,6 +298,66 @@ export function GoldList({
     );
   };
 
+  const getDiffShort = (raw: string): string => {
+    const s = (raw || '').trim().toLowerCase();
+    if (s.startsWith('beg')) return 'B';
+    if (s.startsWith('int')) return 'I';
+    if (s.startsWith('adv')) return 'A';
+    if (s.startsWith('exp')) return 'E';
+    if (s.startsWith('gm')) {
+      const rest = s.slice(2).trim();
+      return rest ? `GM${rest}` : 'GM';
+    }
+    return raw.slice(0, 2).toUpperCase();
+  };
+
+  const getDiffRank = (raw: string): number => {
+    const s = (raw || '').trim().toLowerCase();
+    if (s.startsWith('beg')) return 1;
+    if (s.startsWith('int')) return 2;
+    if (s.startsWith('adv')) return 3;
+    if (s.startsWith('exp')) return 4;
+    if (s.startsWith('gm')) return 5;
+    return 0;
+  };
+
+  const renderGroupDifficultySummary = (levels: Gold[]) => {
+    if (levels.length === 0) {
+      return <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>;
+    }
+
+    const uniqueDiffs = Array.from(
+      new Set(levels.map((l) => (l.difficulty || '').trim()).filter(Boolean))
+    ).sort((a, b) => getDiffRank(a) - getDiffRank(b));
+
+    if (uniqueDiffs.length === 0) {
+      return <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>;
+    }
+
+    const shortLabel =
+      uniqueDiffs.length === 1
+        ? getDiffShort(uniqueDiffs[0])
+        : `${getDiffShort(uniqueDiffs[0])}-${getDiffShort(uniqueDiffs[uniqueDiffs.length - 1])}`;
+
+    // Use tag style from highest difficulty in the group
+    const highest = uniqueDiffs[uniqueDiffs.length - 1].toLowerCase();
+    let tagStyleClass = 'tag-beginner';
+    if (highest.startsWith('gm')) tagStyleClass = 'tag-gm';
+    else if (highest.startsWith('exp')) tagStyleClass = 'tag-expert';
+    else if (highest.startsWith('adv')) tagStyleClass = 'tag-advanced';
+    else if (highest.startsWith('int')) tagStyleClass = 'tag-intermediate';
+
+    return (
+      <span
+        className={`tag ${tagStyleClass}`}
+        title={`Difficulties: ${uniqueDiffs.join(', ')}`}
+        style={{ letterSpacing: '0.04em', fontWeight: 800, padding: '0.15rem 0.6rem' }}
+      >
+        {shortLabel}
+      </span>
+    );
+  };
+
   const renderDifficultyBadge = (difficulty: string) => {
     const d = (difficulty || 'beginner').trim().toLowerCase();
     let diffClass = 'tag-beginner';
@@ -195,18 +399,33 @@ export function GoldList({
             </tr>
           </thead>
           <tbody>
-            {displayItems.map((item) => {
+            {displayItems.map((item, topIndex) => {
               if (item.type === 'standalone') {
                 const gold = item.gold;
                 const isHidden = Boolean(gold.hidden);
+                const isBeingDragged = draggedTopIndex === topIndex;
+                const isDragOver = dragOverTopIndex === topIndex;
 
                 return (
                   <tr
                     key={gold.id}
+                    draggable={canDrag}
+                    onDragStart={(e) => handleTopDragStart(e, topIndex)}
+                    onDragOver={(e) => handleTopDragOver(e, topIndex)}
+                    onDrop={(e) => handleTopDrop(e, topIndex)}
+                    onDragEnd={() => {
+                      setDraggedTopIndex(null);
+                      setDragOverTopIndex(null);
+                    }}
                     style={{
-                      borderBottom: '1px solid var(--border)',
+                      borderBottom: isDragOver ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      opacity: isBeingDragged ? 0.4 : 1,
                       transition: 'background 0.15s ease',
-                      background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.05)' : undefined,
+                      background: isDragOver
+                        ? 'rgba(245, 158, 11, 0.12)'
+                        : isHidden && isAdmin
+                        ? 'rgba(239, 68, 68, 0.05)'
+                        : undefined,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background =
@@ -220,6 +439,20 @@ export function GoldList({
                     {/* Name */}
                     <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {canDrag && (
+                          <span
+                            title="Drag to reorder"
+                            style={{
+                              color: 'var(--text-secondary)',
+                              cursor: 'grab',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              opacity: 0.6,
+                            }}
+                          >
+                            <GripVertical size={16} />
+                          </span>
+                        )}
                         <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.02em' }}>
                           {gold.name}
                         </span>
@@ -366,14 +599,29 @@ export function GoldList({
 
               // Group URL or video
               const groupUrl = meta?.url;
+              const isBeingDragged = draggedTopIndex === topIndex;
+              const isDragOver = dragOverTopIndex === topIndex;
 
               return (
                 <React.Fragment key={`group-${item.groupName}`}>
                   <tr
+                    draggable={canDrag}
+                    onDragStart={(e) => handleTopDragStart(e, topIndex)}
+                    onDragOver={(e) => handleTopDragOver(e, topIndex)}
+                    onDrop={(e) => handleTopDrop(e, topIndex)}
+                    onDragEnd={() => {
+                      setDraggedTopIndex(null);
+                      setDragOverTopIndex(null);
+                    }}
                     onClick={() => toggleGroup(item.groupName)}
                     style={{
-                      borderBottom: '1px solid var(--border)',
-                      background: isExpanded ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                      borderBottom: isDragOver ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      opacity: isBeingDragged ? 0.4 : 1,
+                      background: isDragOver
+                        ? 'rgba(245, 158, 11, 0.16)'
+                        : isExpanded
+                        ? 'rgba(245, 158, 11, 0.08)'
+                        : 'rgba(255, 255, 255, 0.02)',
                       cursor: 'pointer',
                       transition: 'background 0.15s ease',
                     }}
@@ -391,6 +639,21 @@ export function GoldList({
                     {/* Group Name Header */}
                     <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        {canDrag && (
+                          <span
+                            title="Drag to reorder"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              color: 'var(--text-secondary)',
+                              cursor: 'grab',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              opacity: 0.6,
+                            }}
+                          >
+                            <GripVertical size={16} />
+                          </span>
+                        )}
                         <button
                           type="button"
                           style={{
@@ -461,17 +724,9 @@ export function GoldList({
                       )}
                     </td>
 
-                    {/* Group Difficulty preview */}
+                    {/* Group Difficulty summary */}
                     <td style={{ padding: '0.95rem 1.15rem', whiteSpace: 'nowrap' }}>
-                      {groupLevels.length > 0 ? (
-                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                          {Array.from(new Set(groupLevels.map((g) => g.difficulty))).slice(0, 3).map((diff) => (
-                            <span key={diff}>{renderDifficultyBadge(diff)}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
-                      )}
+                      {renderGroupDifficultySummary(groupLevels)}
                     </td>
 
                     {/* Group Date */}
@@ -594,14 +849,33 @@ export function GoldList({
                   {/* Expanded group rows */}
                   {isExpanded &&
                     (groupLevels.length > 0 ? (
-                      groupLevels.map((gold) => {
+                      groupLevels.map((gold, innerIndex) => {
                         const isHidden = Boolean(gold.hidden);
+                        const isInnerDragged = activeGroupDrag === item.groupName && draggedInnerIndex === innerIndex;
+                        const isInnerOver = activeGroupDrag === item.groupName && dragOverInnerIndex === innerIndex;
+
                         return (
                           <tr
                             key={gold.id}
+                            draggable={canDrag}
+                            onDragStart={(e) => handleInnerDragStart(e, item.groupName, innerIndex)}
+                            onDragOver={(e) => handleInnerDragOver(e, item.groupName, innerIndex)}
+                            onDrop={(e) => handleInnerDrop(e, item.groupName, innerIndex, groupLevels)}
+                            onDragEnd={() => {
+                              setActiveGroupDrag(null);
+                              setDraggedInnerIndex(null);
+                              setDragOverInnerIndex(null);
+                            }}
                             style={{
-                              borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                              background: isHidden && isAdmin ? 'rgba(239, 68, 68, 0.06)' : 'rgba(0, 0, 0, 0.25)',
+                              borderBottom: isInnerOver
+                                ? '2px solid var(--accent)'
+                                : '1px solid rgba(255, 255, 255, 0.04)',
+                              opacity: isInnerDragged ? 0.35 : 1,
+                              background: isInnerOver
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : isHidden && isAdmin
+                                ? 'rgba(239, 68, 68, 0.06)'
+                                : 'rgba(0, 0, 0, 0.25)',
                               transition: 'background 0.15s ease',
                             }}
                             onMouseEnter={(e) => {
@@ -616,8 +890,22 @@ export function GoldList({
                             }}
                           >
                             {/* Level Name */}
-                            <td style={{ padding: '0.75rem 1.15rem 0.75rem 3rem', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <td style={{ padding: '0.75rem 1.15rem 0.75rem 2.2rem', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                {canDrag && (
+                                  <span
+                                    title="Drag to reorder inside group"
+                                    style={{
+                                      color: 'var(--text-secondary)',
+                                      cursor: 'grab',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      opacity: 0.5,
+                                    }}
+                                  >
+                                    <GripVertical size={14} />
+                                  </span>
+                                )}
                                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>↳</span>
                                 <span style={{ color: '#f3f4f6', fontWeight: 600, fontSize: '0.98rem' }}>
                                   {gold.name}
