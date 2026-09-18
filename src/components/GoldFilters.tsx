@@ -41,11 +41,15 @@ export function GoldFilters({
             className="form-select"
           >
             <option value="All">All Difficulties</option>
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-            <option value="Insane">Insane</option>
-            <option value="Extreme">Extreme</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Expert">Expert</option>
+            <option value="GM (All)">GM (All Grandmaster)</option>
+            <option value="GM">GM</option>
+            <option value="GM+1">GM+1</option>
+            <option value="GM+2">GM+2</option>
+            <option value="GM+3">GM+3</option>
           </select>
         </div>
 

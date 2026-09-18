@@ -9,10 +9,24 @@ interface EditGoldModalProps {
 }
 
 export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
+  // Parse initial difficulty
+  const initialDiff = gold.difficulty || 'Beginner';
+  let initialBase = initialDiff;
+  let initialMod = '';
+
+  if (initialDiff.toUpperCase().startsWith('GM')) {
+    initialBase = 'GM';
+    const rest = initialDiff.slice(2).trim();
+    if (rest) {
+      initialMod = rest.startsWith('+') ? rest : `+${rest}`;
+    }
+  }
+
   const [formData, setFormData] = useState({
     placement: gold.placement != null ? String(gold.placement) : '',
     name: gold.name,
-    difficulty: gold.difficulty,
+    baseDifficulty: initialBase,
+    gmModifier: initialMod,
     date: gold.date || 'Initial',
     attempts: gold.attempts != null ? String(gold.attempts) : '',
     clip: gold.clip || '',
@@ -44,11 +58,17 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
       const placementNum =
         formData.placement.trim() === '' ? gold.placement : Number(formData.placement);
 
+      let finalDifficulty = formData.baseDifficulty;
+      if (formData.baseDifficulty === 'GM' && formData.gmModifier.trim()) {
+        const mod = formData.gmModifier.trim();
+        finalDifficulty = mod.startsWith('+') ? `GM${mod}` : `GM+${mod}`;
+      }
+
       onSave({
         ...gold,
         placement: placementNum,
         name: formData.name.trim(),
-        difficulty: formData.difficulty,
+        difficulty: finalDifficulty,
         date: formData.date.trim() || 'Initial',
         attempts: attemptsNum,
         clip: formData.clip.trim() || null,
@@ -106,15 +126,15 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
             <div className="form-group">
               <label className="form-label">Difficulty</label>
               <select
-                value={formData.difficulty}
-                onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                value={formData.baseDifficulty}
+                onChange={(e) => setFormData({ ...formData, baseDifficulty: e.target.value })}
                 className="form-select"
               >
-                <option value="Easy">Easy</option>
-                <option value="Medium">Medium</option>
-                <option value="Hard">Hard</option>
-                <option value="Insane">Insane</option>
-                <option value="Extreme">Extreme</option>
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+                <option value="Expert">Expert</option>
+                <option value="GM">GM (Grandmaster)</option>
               </select>
             </div>
 
@@ -130,6 +150,36 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
             </div>
           </div>
 
+          {/* Optional GM Modifier */}
+          {formData.baseDifficulty === 'GM' && (
+            <div className="form-group">
+              <label className="form-label">GM Modifier (+1, +2, +3... Optional)</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <select
+                  value={formData.gmModifier}
+                  onChange={(e) => setFormData({ ...formData, gmModifier: e.target.value })}
+                  className="form-select"
+                  style={{ flex: 1 }}
+                >
+                  <option value="">None (Standard GM)</option>
+                  <option value="+1">+1</option>
+                  <option value="+2">+2</option>
+                  <option value="+3">+3</option>
+                  <option value="+4">+4</option>
+                  <option value="+5">+5</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Or custom (e.g. +1)"
+                  value={formData.gmModifier}
+                  onChange={(e) => setFormData({ ...formData, gmModifier: e.target.value })}
+                  className="form-input"
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="form-row">
             {/* Attempts */}
             <div className="form-group">
@@ -137,10 +187,12 @@ export function EditGoldModal({ gold, onSave, onCancel }: EditGoldModalProps) {
               <input
                 type="number"
                 min="0"
+                max="9999999"
                 value={formData.attempts}
                 onChange={(e) => setFormData({ ...formData, attempts: e.target.value })}
                 className="form-input"
-                placeholder="Leave blank if uncounted"
+                style={{ maxWidth: '140px' }}
+                placeholder="e.g. 1250"
               />
               {errors.attempts && <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{errors.attempts}</p>}
             </div>

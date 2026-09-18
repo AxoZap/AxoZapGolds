@@ -70,17 +70,17 @@ export function GoldList({
                 </div>
               </th>
 
-              {/* Date */}
-              <th style={thStyle}>Date</th>
-
               {/* Name */}
               <th style={thStyle}>Name</th>
 
               {/* Difficulty */}
               <th style={thStyle}>Difficulty</th>
 
+              {/* Date */}
+              <th style={thStyle}>Date</th>
+
               {/* Attempts */}
-              <th style={thStyle}>Attempts</th>
+              <th style={{ ...thStyle, textAlign: 'center', width: '110px' }}>Attempts</th>
 
               {/* Clip */}
               <th style={{ ...thStyle, textAlign: 'center' }}>Clip</th>
@@ -92,7 +92,13 @@ export function GoldList({
           <tbody>
             {golds.map((gold, index) => {
               const isHidden = Boolean(gold.hidden);
-              const diffClass = `tag-${(gold.difficulty || 'easy').toLowerCase().replace(/\s+/g, '-')}`;
+              const d = (gold.difficulty || 'beginner').trim().toLowerCase();
+              let diffClass = 'tag-beginner';
+              if (d.startsWith('gm')) diffClass = 'tag-gm';
+              else if (d.startsWith('beg')) diffClass = 'tag-beginner';
+              else if (d.startsWith('int')) diffClass = 'tag-intermediate';
+              else if (d.startsWith('adv')) diffClass = 'tag-advanced';
+              else if (d.startsWith('exp')) diffClass = 'tag-expert';
 
               return (
                 <tr
@@ -115,14 +121,6 @@ export function GoldList({
                   <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
                     <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-secondary)' }}>
                       #{showFilteredRanks ? index + 1 : (gold.placement || index + 1)}
-                    </span>
-                  </td>
-
-                  {/* Date */}
-                  <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
-                    <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
-                      <Calendar size={13} />
-                      {gold.date || 'Initial'}
                     </span>
                   </td>
 
@@ -159,14 +157,37 @@ export function GoldList({
                     <span className={`tag ${diffClass}`}>{gold.difficulty}</span>
                   </td>
 
-                  {/* Attempts */}
+                  {/* Date */}
                   <td style={{ padding: '0.9rem 1.15rem', whiteSpace: 'nowrap' }}>
+                    <span className={`date-badge ${gold.date?.toLowerCase() === 'initial' ? 'initial' : ''}`}>
+                      <Calendar size={13} />
+                      {gold.date || 'Initial'}
+                    </span>
+                  </td>
+
+                  {/* Attempts (Smaller box, max like 6 digits size) */}
+                  <td style={{ padding: '0.9rem 1.15rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     {gold.attempts != null && gold.attempts !== undefined ? (
-                      <span style={{ fontWeight: 600, color: '#fff' }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          minWidth: '3.6rem',
+                          maxWidth: '5.2rem',
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: '1px solid var(--border)',
+                          padding: '0.2rem 0.45rem',
+                          borderRadius: '6px',
+                          fontWeight: 700,
+                          color: '#fff',
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: '0.85rem',
+                          textAlign: 'center',
+                        }}
+                      >
                         {gold.attempts.toLocaleString()}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--text-secondary)', opacity: 0.45 }}>—</span>
+                      <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
                     )}
                   </td>
 

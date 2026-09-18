@@ -144,8 +144,12 @@ export default function App() {
     return golds
       .filter((gold) => {
         // Difficulty filter
-        if (filters.difficulty !== 'All' && gold.difficulty.toLowerCase() !== filters.difficulty.toLowerCase()) {
-          return false;
+        if (filters.difficulty !== 'All') {
+          if (filters.difficulty === 'GM (All)') {
+            if (!gold.difficulty.toUpperCase().startsWith('GM')) return false;
+          } else if (gold.difficulty.toLowerCase() !== filters.difficulty.toLowerCase()) {
+            return false;
+          }
         }
 
         // Side filter (A, B, C)
@@ -188,16 +192,19 @@ export default function App() {
         } else if (sortBy === 'attempts') {
           diff = (a.attempts || 0) - (b.attempts || 0);
         } else if (sortBy === 'difficulty') {
-          const diffRank: Record<string, number> = {
-            easy: 1,
-            medium: 2,
-            hard: 3,
-            insane: 4,
-            extreme: 5,
+          const getDiffScore = (raw: string) => {
+            const s = (raw || '').trim().toLowerCase();
+            if (s.startsWith('beg')) return 10;
+            if (s.startsWith('int')) return 20;
+            if (s.startsWith('adv')) return 30;
+            if (s.startsWith('exp')) return 40;
+            if (s.startsWith('gm')) {
+              const num = parseInt(s.replace(/[^0-9]/g, ''), 10);
+              return 50 + (isNaN(num) ? 0 : num);
+            }
+            return 0;
           };
-          const rA = diffRank[a.difficulty.toLowerCase()] || 0;
-          const rB = diffRank[b.difficulty.toLowerCase()] || 0;
-          diff = rA - rB;
+          diff = getDiffScore(a.difficulty) - getDiffScore(b.difficulty);
         }
 
         return sortOrder === 'asc' ? diff : -diff;
