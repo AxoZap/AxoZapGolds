@@ -198,11 +198,10 @@ export function GoldList({
                         href={gold.clip}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="clip-link"
-                        title="Watch clip on YouTube"
+                        className="clip-icon-link"
+                        title="Watch Video"
                       >
-                        <Youtube size={15} color="#ef4444" />
-                        <span>Watch</span>
+                        <Youtube size={19} />
                       </a>
                     ) : (
                       <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>

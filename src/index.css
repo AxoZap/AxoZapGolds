@@ -267,25 +267,19 @@ body {
   color: #fbbf24;
 }
 
-.clip-link {
+.clip-icon-link {
+  color: #ef4444;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #f87171;
-  padding: 0.3rem 0.65rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.2s;
+  justify-content: center;
+  transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  opacity: 0.9;
 }
 
-.clip-link:hover {
-  background: rgba(239, 68, 68, 0.22);
-  color: #fff;
-  transform: translateY(-1px);
+.clip-icon-link:hover {
+  transform: scale(1.2);
+  color: #f87171;
+  opacity: 1;
 }
 
 .filters {
