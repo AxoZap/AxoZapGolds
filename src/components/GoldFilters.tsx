@@ -1,8 +1,10 @@
-import { Filter, ArrowUpDown, Search } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Filter, ArrowUpDown, Search, ChevronDown, Check } from 'lucide-react';
 
 export interface FilterState {
-  difficulty: string;
-  groupFilter: 'All' | 'Grouped' | 'Ungrouped';
+  difficulties: string[];
+  groupFilter: 'All' | 'Groups' | 'Single';
+  statusFilter: 'All' | 'Uncompleted' | 'Completed' | 'Completed Groups';
   hasClip: boolean;
   searchQuery: string;
 }
@@ -16,6 +18,18 @@ interface GoldFiltersProps {
   onSortOrderChange: (order: 'asc' | 'desc') => void;
 }
 
+const DIFFICULTY_OPTIONS = [
+  'Beginner',
+  'Intermediate',
+  'Advanced',
+  'Expert',
+  'GM (All)',
+  'GM',
+  'GM+1',
+  'GM+2',
+  'GM+3',
+];
+
 export function GoldFilters({
   filters,
   onFiltersChange,
@@ -24,6 +38,43 @@ export function GoldFilters({
   sortOrder,
   onSortOrderChange,
 }: GoldFiltersProps) {
+  const [diffDropdownOpen, setDiffDropdownOpen] = useState(false);
+  const diffRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (diffRef.current && !diffRef.current.contains(event.target as Node)) {
+        setDiffDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleDifficulty = (val: string) => {
+    const current = filters.difficulties || [];
+    let updated: string[];
+    if (current.includes(val)) {
+      updated = current.filter((d) => d !== val);
+    } else {
+      updated = [...current, val];
+    }
+    onFiltersChange({ ...filters, difficulties: updated });
+  };
+
+  const clearDifficulties = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFiltersChange({ ...filters, difficulties: [] });
+  };
+
+  const diffLabel = () => {
+    const d = filters.difficulties || [];
+    if (d.length === 0) return 'All Difficulties';
+    if (d.length === 1) return d[0];
+    return `${d.length} Selected`;
+  };
+
   return (
     <div className="filters">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
@@ -31,43 +82,177 @@ export function GoldFilters({
         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: '0.02em' }}>Filters & Sorting</h3>
       </div>
 
-      <div className="filters-grid">
-        {/* Difficulty */}
-        <div className="form-group" style={{ marginBottom: 0 }}>
+      <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+        {/* 1. Difficulty (Multiselect) */}
+        <div className="form-group" style={{ marginBottom: 0, position: 'relative' }} ref={diffRef}>
           <label className="form-label">Difficulty</label>
-          <select
-            value={filters.difficulty}
-            onChange={(e) => onFiltersChange({ ...filters, difficulty: e.target.value })}
+          <div
+            onClick={() => setDiffDropdownOpen(!diffDropdownOpen)}
             className="form-select"
+            style={{
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              userSelect: 'none',
+              padding: '0.75rem 0.9rem',
+            }}
           >
-            <option value="All">All Difficulties</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-            <option value="Expert">Expert</option>
-            <option value="GM (All)">GM (All Grandmaster)</option>
-            <option value="GM">GM</option>
-            <option value="GM+1">GM+1</option>
-            <option value="GM+2">GM+2</option>
-            <option value="GM+3">GM+3</option>
-          </select>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '0.5rem' }}>
+              {diffLabel()}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              {(filters.difficulties || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearDifficulties}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '4px',
+                    fontSize: '0.7rem',
+                    padding: '0.1rem 0.35rem',
+                    cursor: 'pointer',
+                  }}
+                  title="Clear selection"
+                >
+                  Clear
+                </button>
+              )}
+              <ChevronDown size={16} style={{ color: 'var(--text-secondary)', transform: diffDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+            </div>
+          </div>
+
+          {/* Multiselect Popover */}
+          {diffDropdownOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                left: 0,
+                right: 0,
+                zIndex: 50,
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                padding: '0.5rem 0',
+                maxHeight: '260px',
+                overflowY: 'auto',
+              }}
+            >
+              <div
+                onClick={() => onFiltersChange({ ...filters, difficulties: [] })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  padding: '0.45rem 0.9rem',
+                  cursor: 'pointer',
+                  fontSize: '0.88rem',
+                  background: (filters.difficulties || []).length === 0 ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
+                  color: (filters.difficulties || []).length === 0 ? 'var(--accent)' : '#fff',
+                  fontWeight: (filters.difficulties || []).length === 0 ? 700 : 500,
+                  borderBottom: '1px solid var(--border)',
+                  marginBottom: '0.25rem',
+                }}
+              >
+                <div
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: (filters.difficulties || []).length === 0 ? 'var(--accent)' : 'transparent',
+                  }}
+                >
+                  {(filters.difficulties || []).length === 0 && <Check size={12} color="#000" />}
+                </div>
+                All Difficulties
+              </div>
+
+              {DIFFICULTY_OPTIONS.map((opt) => {
+                const isChecked = (filters.difficulties || []).includes(opt);
+                return (
+                  <div
+                    key={opt}
+                    onClick={() => toggleDifficulty(opt)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      padding: '0.45rem 0.9rem',
+                      cursor: 'pointer',
+                      fontSize: '0.88rem',
+                      background: isChecked ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                      color: isChecked ? 'var(--accent)' : 'var(--text-primary)',
+                      fontWeight: isChecked ? 600 : 400,
+                      transition: 'background 0.1s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = isChecked ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.04)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = isChecked ? 'rgba(245, 158, 11, 0.08)' : 'transparent';
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '4px',
+                        border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: isChecked ? 'var(--accent)' : 'transparent',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {isChecked && <Check size={12} color="#000" />}
+                    </div>
+                    {opt}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Group Filter */}
+        {/* 2. Group Filter: All, Groups, Single */}
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Group / Standalone</label>
+          <label className="form-label">Grouping</label>
           <select
             value={filters.groupFilter}
             onChange={(e) => onFiltersChange({ ...filters, groupFilter: e.target.value as any })}
             className="form-select"
           >
-            <option value="All">All Levels</option>
-            <option value="Grouped">In a Group</option>
-            <option value="Ungrouped">Not in a Group</option>
+            <option value="All">All</option>
+            <option value="Groups">Groups</option>
+            <option value="Single">Single</option>
           </select>
         </div>
 
-        {/* Sort By */}
+        {/* 3. Status Filter: Uncompleted, Completed, Completed Groups */}
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Status</label>
+          <select
+            value={filters.statusFilter || 'All'}
+            onChange={(e) => onFiltersChange({ ...filters, statusFilter: e.target.value as any })}
+            className="form-select"
+          >
+            <option value="All">All Statuses</option>
+            <option value="Uncompleted">Uncompleted</option>
+            <option value="Completed">Completed</option>
+            <option value="Completed Groups">Completed Groups</option>
+          </select>
+        </div>
+
+        {/* 4. Sort By */}
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Sort By</label>
           <select
@@ -83,7 +268,7 @@ export function GoldFilters({
           </select>
         </div>
 
-        {/* Sort Direction */}
+        {/* 5. Sort Direction */}
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Direction</label>
           <button

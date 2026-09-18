@@ -52,8 +52,9 @@ export default function App() {
   const [editingGroup, setEditingGroup] = useState<LevelGroup | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
-    difficulty: 'All',
+    difficulties: [],
     groupFilter: 'All',
+    statusFilter: 'All',
     hasClip: false,
     searchQuery: '',
   });
@@ -290,29 +291,59 @@ export default function App() {
 
   // Filter and Sort Logic
   const filteredGolds = useMemo(() => {
+    // Determine which groups are fully completed (every member has completed !== false)
+    const groupMemberMap = new Map<string, Gold[]>();
+    for (const g of golds) {
+      const gn = (g.group_name || '').trim().toLowerCase();
+      if (gn) {
+        if (!groupMemberMap.has(gn)) groupMemberMap.set(gn, []);
+        groupMemberMap.get(gn)!.push(g);
+      }
+    }
+
+    const completedGroupNames = new Set<string>();
+    for (const [gn, members] of groupMemberMap.entries()) {
+      if (members.length > 0 && members.every((m) => m.completed !== false)) {
+        completedGroupNames.add(gn);
+      }
+    }
+
     const list = golds.filter((gold) => {
-      // Difficulty filter
-      if (filters.difficulty !== 'All') {
-        if (filters.difficulty === 'GM (All)') {
-          if (!gold.difficulty.toUpperCase().startsWith('GM')) return false;
-        } else if (gold.difficulty.toLowerCase() !== filters.difficulty.toLowerCase()) {
-          return false;
-        }
+      // 1. Difficulty filter (Multiselect)
+      const selDiffs = filters.difficulties || [];
+      if (selDiffs.length > 0) {
+        const matchesAny = selDiffs.some((d) => {
+          if (d === 'GM (All)') {
+            return gold.difficulty.toUpperCase().startsWith('GM');
+          }
+          return gold.difficulty.toLowerCase() === d.toLowerCase();
+        });
+        if (!matchesAny) return false;
       }
 
-      // Group filter (All, In a Group, Not in a Group)
-      if (filters.groupFilter === 'Grouped') {
+      // 2. Group filter: All, Groups, Single
+      if (filters.groupFilter === 'Groups') {
         if (!gold.group_name || !gold.group_name.trim()) return false;
-      } else if (filters.groupFilter === 'Ungrouped') {
+      } else if (filters.groupFilter === 'Single') {
         if (gold.group_name && gold.group_name.trim()) return false;
       }
 
-      // Clip filter
+      // 3. Status filter: All, Uncompleted, Completed, Completed Groups
+      if (filters.statusFilter === 'Uncompleted') {
+        if (gold.completed !== false) return false;
+      } else if (filters.statusFilter === 'Completed') {
+        if (gold.completed === false) return false;
+      } else if (filters.statusFilter === 'Completed Groups') {
+        const gn = (gold.group_name || '').trim().toLowerCase();
+        if (!gn || !completedGroupNames.has(gn)) return false;
+      }
+
+      // 4. Clip filter
       if (filters.hasClip && !gold.clip) {
         return false;
       }
 
-      // Search query
+      // 5. Search query
       if (filters.searchQuery.trim()) {
         const q = filters.searchQuery.toLowerCase().trim();
         const matchesName = gold.name.toLowerCase().includes(q);
@@ -462,12 +493,17 @@ export default function App() {
         const activeGroupNames = new Set(
           filteredGolds.map((g) => g.group_name?.trim()).filter(Boolean) as string[]
         );
-        if (filters.groupFilter !== 'Ungrouped') {
+        if (filters.groupFilter !== 'Single') {
           for (const grp of groups) {
             if (
               !filters.searchQuery ||
               grp.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
             ) {
+              // Respect statusFilter for empty groups
+              if (filters.statusFilter === 'Completed' || filters.statusFilter === 'Completed Groups') {
+                // Empty groups are not completed
+                continue;
+              }
               activeGroupNames.add(grp.name.trim());
             }
           }
@@ -495,6 +531,7 @@ export default function App() {
           golds={filteredGolds}
           allGolds={golds}
           groups={groups}
+          groupFilter={filters.groupFilter}
           onDelete={handleDeleteGold}
           onEdit={(gold) => setEditingGold(gold)}
           onEditGroup={(group) => setEditingGroup(group)}

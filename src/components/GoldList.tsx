@@ -21,6 +21,7 @@ interface GoldListProps {
   golds: Gold[];
   allGolds: Gold[];
   groups: LevelGroup[];
+  groupFilter?: 'All' | 'Groups' | 'Single';
   onDelete: (id: string | number) => void;
   onEdit: (gold: Gold) => void;
   onEditGroup: (group: LevelGroup) => void;
@@ -39,6 +40,7 @@ export function GoldList({
   golds,
   allGolds,
   groups,
+  groupFilter = 'All',
   onDelete,
   onEdit,
   onEditGroup,
@@ -227,16 +229,18 @@ export function GoldList({
     }
   }
 
-  // Also show defined groups from level_groups that currently have 0 matching levels
-  for (const grp of groups) {
-    const lowerGrp = grp.name.trim().toLowerCase();
-    if (!processedGroups.has(lowerGrp)) {
-      displayItems.push({
-        type: 'group',
-        groupName: grp.name,
-        golds: [],
-        metadata: grp,
-      });
+  // Also show defined groups from level_groups that currently have 0 matching levels (if not filtering Single only)
+  if (groupFilter !== 'Single') {
+    for (const grp of groups) {
+      const lowerGrp = grp.name.trim().toLowerCase();
+      if (!processedGroups.has(lowerGrp)) {
+        displayItems.push({
+          type: 'group',
+          groupName: grp.name,
+          golds: [],
+          metadata: grp,
+        });
+      }
     }
   }
 
@@ -495,11 +499,6 @@ export function GoldList({
                           <Calendar size={13} />
                           {gold.date}
                         </span>
-                      ) : gold.date && gold.date.toLowerCase() === 'initial' ? (
-                        <span className="date-badge initial">
-                          <Calendar size={13} />
-                          Initial
-                        </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
                       )}
@@ -590,12 +589,12 @@ export function GoldList({
               // Date: group.date override if provided, otherwise latest member date
               const memberNonInitialDates = groupLevels
                 .map((g) => g.date)
-                .filter((d) => d && d.toLowerCase() !== 'initial');
-              const displayDate = meta?.date
+                .filter((d) => d && d.trim() && d.toLowerCase() !== 'initial');
+              const displayDate = meta?.date && meta.date.trim() && meta.date.toLowerCase() !== 'initial'
                 ? meta.date
                 : memberNonInitialDates.length > 0
                 ? memberNonInitialDates.sort().reverse()[0]
-                : groupLevels[0]?.date || 'Initial';
+                : '';
 
               // Group URL or video
               const groupUrl = meta?.url;
@@ -735,11 +734,6 @@ export function GoldList({
                         <span className="date-badge">
                           <Calendar size={13} />
                           {displayDate}
-                        </span>
-                      ) : displayDate && displayDate.toLowerCase() === 'initial' ? (
-                        <span className="date-badge initial">
-                          <Calendar size={13} />
-                          Initial
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
@@ -948,11 +942,6 @@ export function GoldList({
                                 <span className="date-badge">
                                   <Calendar size={13} />
                                   {gold.date}
-                                </span>
-                              ) : gold.date && gold.date.toLowerCase() === 'initial' ? (
-                                <span className="date-badge initial">
-                                  <Calendar size={13} />
-                                  Initial
                                 </span>
                               ) : (
                                 <span style={{ color: 'var(--text-secondary)', opacity: 0.35 }}>—</span>
