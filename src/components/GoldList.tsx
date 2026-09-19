@@ -628,15 +628,11 @@ export function GoldList({
               const memberAttemptsSum = groupLevels.reduce((sum, g) => sum + (g.attempts || 0), 0);
               const groupAttempts = meta?.attempts != null ? meta.attempts : (groupLevels.some((g) => g.attempts != null) ? memberAttemptsSum : null);
 
-              // Date: group.date override if provided, otherwise latest member date
-              const memberNonInitialDates = groupLevels
-                .map((g) => g.date)
-                .filter((d) => d && d.trim() && d.toLowerCase() !== 'initial');
-              const displayDate = meta?.date && meta.date.trim() && meta.date.toLowerCase() !== 'initial'
-                ? meta.date
-                : memberNonInitialDates.length > 0
-                ? memberNonInitialDates.sort().reverse()[0]
-                : '';
+              // Date: only show if explicitly configured on the group/pack (no auto date from inner levels)
+              const displayDate =
+                meta?.date && meta.date.trim() && meta.date.toLowerCase() !== 'initial'
+                  ? meta.date.trim()
+                  : '';
 
               // Group URL or video
               const groupUrl = meta?.url;

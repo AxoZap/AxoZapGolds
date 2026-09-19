@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LevelGroup } from '../App';
-import { Layers, X } from 'lucide-react';
+import { Layers, X, Calendar } from 'lucide-react';
+import { getTodayDateEST } from '../dateUtils';
 
 interface AddGroupModalProps {
   onAdd: (group: Omit<LevelGroup, 'id'>) => void;
@@ -11,7 +12,7 @@ export function AddGroupModal({ onAdd, onCancel }: AddGroupModalProps) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     url: '',
     attempts: '',
   });
@@ -93,7 +94,27 @@ export function AddGroupModal({ onAdd, onCancel }: AddGroupModalProps) {
           <div className="form-row">
             {/* Date */}
             <div className="form-group">
-              <label className="form-label">Date (Optional)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>Date (Optional)</label>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, date: getTodayDateEST() }))}
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    padding: '0.15rem 0.55rem',
+                    fontSize: '0.75rem',
+                    borderRadius: '5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    lineHeight: '1.3',
+                  }}
+                  title="Fill with today's date in EST"
+                >
+                  <Calendar size={12} />
+                  Date Today
+                </button>
+              </div>
               <input
                 type="date"
                 value={formData.date}
